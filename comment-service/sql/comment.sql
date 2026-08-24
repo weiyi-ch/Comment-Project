@@ -39,8 +39,6 @@ CREATE TABLE IF NOT EXISTS post (
     title VARCHAR(200) NOT NULL,
     content TEXT NOT NULL,
     status TINYINT NOT NULL DEFAULT 1 COMMENT '1已发布 2已下架/删除',
-    like_count INT NOT NULL DEFAULT 0 COMMENT '点赞数',
-    comment_count INT NOT NULL DEFAULT 0 COMMENT '有效评论数',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at DATETIME NULL,
@@ -48,6 +46,18 @@ CREATE TABLE IF NOT EXISTS post (
     KEY idx_author_status_ct (author_id, status, created_at),
     KEY idx_status_ct (status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知识帖表';
+
+CREATE TABLE IF NOT EXISTS post_counter (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    post_id BIGINT NOT NULL COMMENT '知识帖ID',
+    like_count INT NOT NULL DEFAULT 0 COMMENT '点赞数',
+    comment_count INT NOT NULL DEFAULT 0 COMMENT '有效评论数',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_post_id (post_id),
+    KEY idx_like_count (like_count),
+    KEY idx_comment_count (comment_count)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知识帖计数表';
 
 CREATE TABLE IF NOT EXISTS post_like (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,

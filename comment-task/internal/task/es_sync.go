@@ -68,17 +68,15 @@ type esSyncRetryRow struct {
 }
 
 type postSearchRow struct {
-	ID           int64
-	PostID       int64
-	AuthorID     int64
-	Title        string
-	Content      string
-	Status       int32
-	LikeCount    int32
-	CommentCount int32
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	DeletedAt    gorm.DeletedAt
+	ID        int64
+	PostID    int64
+	AuthorID  int64
+	Title     string
+	Content   string
+	Status    int32
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt
 }
 
 type studyCommentSearchRow struct {
@@ -191,17 +189,15 @@ func (js *JobWorker) buildLatestESDoc(ctx context.Context, table, docID, eventTy
 
 func buildPostESDocFromDB(post postSearchRow) map[string]interface{} {
 	return map[string]interface{}{
-		"id":            post.ID,
-		"post_id":       post.PostID,
-		"author_id":     post.AuthorID,
-		"title":         post.Title,
-		"content":       post.Content,
-		"status":        post.Status,
-		"like_count":    post.LikeCount,
-		"comment_count": post.CommentCount,
-		"created_at":    formatESTime(post.CreatedAt),
-		"updated_at":    formatESTime(post.UpdatedAt),
-		"deleted_at":    formatGormDeletedAt(post.DeletedAt),
+		"id":         post.ID,
+		"post_id":    post.PostID,
+		"author_id":  post.AuthorID,
+		"title":      post.Title,
+		"content":    post.Content,
+		"status":     post.Status,
+		"created_at": formatESTime(post.CreatedAt),
+		"updated_at": formatESTime(post.UpdatedAt),
+		"deleted_at": formatGormDeletedAt(post.DeletedAt),
 	}
 }
 

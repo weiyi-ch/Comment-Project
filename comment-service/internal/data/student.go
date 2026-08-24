@@ -102,7 +102,7 @@ func NewStudentRepo(data *Data, logger log.Logger) biz.StudentRepo {
 //
 // 写入内容：
 // 1. 用单条 upsert 更新 post_like 点赞状态，减少热点并发下的锁范围；
-// 2. 状态真实变化后把 like_count delta 写入 Redis 队列，由 comment-task 异步批量落库。
+// 2. 状态真实变化后把 like_count delta 写入 Redis 队列，由 comment-task 异步批量落到 post_counter。
 //
 // 缓存处理：
 // 请求链路不删除帖子统计缓存；详情读取时把缓存基础值与 Redis pending delta 相加。
@@ -153,7 +153,7 @@ ON DUPLICATE KEY UPDATE
 	}
 
 	if changed {
-		// 点赞计数不在请求内同步更新 post.like_count，只写 +1 delta 等待 comment-task 刷库。
+		// 点赞计数不在请求内同步更新 post 表，只写 +1 delta 等待 comment-task 刷入 post_counter。
 		if err := r.recordPostLikeCountDelta(ctx, postID, 1); err != nil {
 			return err
 		}
@@ -166,7 +166,7 @@ ON DUPLICATE KEY UPDATE
 //
 // 写入内容：
 // 1. 用单条 update 将 post_like.status 改为 0；
-// 2. 如果确实取消成功，把 like_count=-1 delta 写入 Redis 队列，由 comment-task 异步批量落库。
+// 2. 如果确实取消成功，把 like_count=-1 delta 写入 Redis 队列，由 comment-task 异步批量落到 post_counter。
 //
 // 缓存处理：
 // 请求链路不删除帖子统计缓存；comment-task 落库成功后统一失效统计缓存。
@@ -219,7 +219,7 @@ WHERE post_id = ? AND student_id = ? AND status = 1
 	}
 
 	if changed {
-		// 取消点赞同样不在请求内同步更新 post.like_count，只写 -1 delta 等待 comment-task 刷库。
+		// 取消点赞同样不在请求内同步更新 post 表，只写 -1 delta 等待 comment-task 刷入 post_counter。
 		// 这可以覆盖“大量用户同时取消同一帖子点赞”的热点写场景。
 		if err := r.recordPostLikeCountDelta(ctx, postID, -1); err != nil {
 			return err
@@ -303,7 +303,7 @@ func sleepPostLikeRetry(ctx context.Context, attempt int) error {
 }
 
 func (r *studentRepo) recordPostLikeCountDelta(ctx context.Context, postID, delta int64) error {
-	// delta 入 Redis 成功后，请求即可返回；真正更新 post.like_count 的动作在 comment-task 中批量执行。
+	// delta 入 Redis 成功后，请求即可返回；真正更新 post_counter 的动作在 comment-task 中批量执行。
 	if err := r.data.enqueuePostLikeCountDelta(ctx, postID, delta); err != nil {
 		r.log.WithContext(ctx).Warnf("enqueue post like count delta failed, post_id=%d, delta=%d, err=%v", postID, delta, err)
 		// post_like 是点赞关系事实表；Redis/Kafka 计数属于异步冗余链路。
@@ -311,7 +311,7 @@ func (r *studentRepo) recordPostLikeCountDelta(ctx context.Context, postID, delt
 		return nil
 	}
 
-	// 点赞请求不删除帖子对象缓存。缓存中的 like_count 作为 MySQL 已落库基础值，
+	// 点赞请求不删除帖子对象缓存。缓存中的 like_count 作为 post_counter 已落库基础值，
 	// 详情读路径会动态叠加 Redis pending delta，因此无需让每次点赞都触发缓存回源。
 	// comment-task 将 delta 成功写入 MySQL 后会删除该缓存，下一次读取再加载新的基础值。
 	return nil
@@ -369,7 +369,7 @@ func (r *studentRepo) CreateComment(ctx context.Context, comment *model.StudyCom
 // 1. 查询评论所属 post_id；
 // 2. visible_status 置为 2；
 // 3. 设置 deleted_at；
-// 4. 事务提交后把 comment_count=-1 写入 Redis delta。
+// 4. 事务提交后把 comment_count=-1 写入 Redis delta，后续异步落到 post_counter。
 //
 // 缓存处理：
 // 1. 删除 mysql:comment:{comment_id}；
@@ -804,7 +804,7 @@ func (r *studentRepo) ListMyComments(ctx context.Context, studentID int64, pageN
 //
 // 复用已有缓存方法：
 // 1. GetPostByID 负责帖子对象缓存；
-// 2. 帖子详情页复用 post.comment_count 作为总数，避免额外 COUNT(*);
+// 2. 帖子详情页复用 post_counter.comment_count 作为总数，避免额外 COUNT(*);
 // 3. 评论列表走 Redis 列表 ID 缓存，评论对象再通过 MGET 批量读取。
 func (r *studentRepo) GetPostDetailWithComments(
 	ctx context.Context,
@@ -842,8 +842,8 @@ func (r *studentRepo) GetPostDetailWithComments(
 
 // listPostCommentsStudentForDetail 查询详情页需要的当前页评论。
 //
-// 详情页的总评论数直接使用 post.comment_count：
-// 1. MySQL 已落库 comment_count 与 Redis pending delta 已在帖子读取时合并；
+// 详情页的总评论数直接使用 post_counter.comment_count：
+// 1. post_counter 已落库 comment_count 与 Redis pending delta 已在帖子读取时合并；
 // 2. 详情页不需要为了展示总数再对 study_comment 做 COUNT(*);
 // 3. 当 comment_count=0 时可以直接返回空列表，完全跳过 MySQL 评论查询。
 func (r *studentRepo) listPostCommentsStudentForDetail(ctx context.Context, post *model.Post, pageNum, pageSize int32) (comments []*model.StudyComment, total int64, err error) {
@@ -947,26 +947,26 @@ func (r *studentRepo) queryPostByIDFromDB(ctx context.Context, postID int64) (po
 
 	p := r.data.q.Post
 
-	return p.WithContext(ctx).
-		Where(p.PostID.Eq(postID), p.Status.Eq(1), p.DeletedAt.IsNull()).
-		First()
-}
-
-// queryPostStatsByIDFromDB 只读取帖子统计字段。
-// 当主体缓存命中而统计缓存因评论数变化失效时，避免重新加载标题和正文。
-func (r *studentRepo) queryPostStatsByIDFromDB(ctx context.Context, postID int64) (*postStatsCache, error) {
-	p := r.data.q.Post
-	post, err := p.WithContext(ctx).
-		Select(p.LikeCount, p.CommentCount).
+	post, err = p.WithContext(ctx).
 		Where(p.PostID.Eq(postID), p.Status.Eq(1), p.DeletedAt.IsNull()).
 		First()
 	if err != nil {
 		return nil, err
 	}
-	return &postStatsCache{
-		LikeCount:    post.LikeCount,
-		CommentCount: post.CommentCount,
-	}, nil
+	if err := r.data.attachPersistedPostCounters(ctx, []*model.Post{post}); err != nil {
+		return nil, err
+	}
+	return post, nil
+}
+
+// queryPostStatsByIDFromDB 只读取帖子统计字段。
+// 当主体缓存命中而统计缓存失效时，只回源 post_counter，不访问 post 主表的高频字段。
+func (r *studentRepo) queryPostStatsByIDFromDB(ctx context.Context, postID int64) (*postStatsCache, error) {
+	stats, err := r.data.queryPostCounterByID(ctx, postID)
+	if err != nil {
+		return nil, err
+	}
+	return stats, nil
 }
 
 // queryCommentByIDFromDB 从 MySQL 按 comment_id 查询评论。
@@ -1066,13 +1066,13 @@ func (r *studentRepo) queryPostCommentsStudentFromDB(ctx context.Context, postID
 
 // queryPostCommentItemsStudentFromDB 只查询帖子评论当前页 items。
 //
-// 返回当前页评论，不再 COUNT；详情页 total 使用 post.comment_count，避免额外慢 COUNT。
+// 返回当前页评论，不再 COUNT；详情页 total 使用 post_counter.comment_count，避免额外慢 COUNT。
 func (r *studentRepo) queryPostCommentItemsStudentFromDB(ctx context.Context, postID int64, pageNum, pageSize int32) (comments []*model.StudyComment, err error) {
 	ctx, span := observability.StartSpan(ctx, "mysql.SELECT study_comment.items",
 		attribute.String("db.system", "mysql"),
 		attribute.String("db.operation", "SELECT"),
 		attribute.String("db.table", "study_comment"),
-		attribute.String("total.source", "post.comment_count"),
+		attribute.String("total.source", "post_counter.comment_count"),
 		attribute.Int64("post_id", postID),
 		attribute.Int("page_num", int(pageNum)),
 		attribute.Int("page_size", int(pageSize)),

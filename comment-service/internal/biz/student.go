@@ -85,7 +85,7 @@ func (uc *StudentUsecase) CreateComment(ctx context.Context, comment *model.Stud
 	comment.VisibleStatus = 1
 	comment.AuditStatus = 0
 
-	// repo.CreateComment 会开启事务插入评论并维护 post.comment_count。
+	// repo.CreateComment 会开启事务插入评论；评论计数通过 Redis delta 异步维护到 post_counter。
 	return uc.repo.CreateComment(ctx, comment)
 }
 

@@ -20,8 +20,8 @@ type Post struct {
 	Title        string         `gorm:"column:title;not null" json:"title"`
 	Content      string         `gorm:"column:content;not null" json:"content"`
 	Status       int32          `gorm:"column:status;not null;default:1;comment:1已发布 2已下架/删除" json:"status"` // 1已发布 2已下架/删除
-	LikeCount    int32          `gorm:"column:like_count;not null" json:"like_count"`
-	CommentCount int32          `gorm:"column:comment_count;not null;comment:有效评论数" json:"comment_count"` // 有效评论数
+	LikeCount    int32          `gorm:"-" json:"like_count"`
+	CommentCount int32          `gorm:"-" json:"comment_count"`
 	CreatedAt    time.Time      `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt    time.Time      `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"column:deleted_at" json:"deleted_at"`

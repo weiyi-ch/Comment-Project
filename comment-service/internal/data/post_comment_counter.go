@@ -47,11 +47,15 @@ func (d *Data) enqueuePostCommentCountDelta(ctx context.Context, postID, delta i
 func (d *Data) recordPostCommentCountDelta(ctx context.Context, postID, delta int64) {
 	if err := d.enqueuePostCommentCountDelta(ctx, postID, delta); err != nil {
 		d.log.WithContext(ctx).Warnf("enqueue post comment count delta failed, post_id=%d, delta=%d, err=%v", postID, delta, err)
-		// Redis 异常时退化为同步更新，避免评论事实已写入但计数永久遗漏。
+		// Redis 异常时退化为同步更新 post_counter，避免评论事实已写入但计数永久遗漏。
+		// 注意不要回写 post 表，否则 Canal 监听 post 时仍会收到高频计数 update。
 		result := d.q.Post.WithContext(context.WithoutCancel(ctx)).UnderlyingDB().Exec(
-			"UPDATE post SET comment_count = GREATEST(comment_count + ?, 0) WHERE post_id = ?",
-			delta,
+			`INSERT INTO post_counter (post_id, like_count, comment_count)
+VALUES (?, 0, GREATEST(?, 0))
+ON DUPLICATE KEY UPDATE comment_count = GREATEST(comment_count + ?, 0)`,
 			postID,
+			delta,
+			delta,
 		)
 		if result.Error != nil {
 			d.log.WithContext(ctx).Errorf("fallback update post comment count failed, post_id=%d, delta=%d, err=%v", postID, delta, result.Error)

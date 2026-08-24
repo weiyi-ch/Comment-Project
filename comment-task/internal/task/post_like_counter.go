@@ -34,6 +34,7 @@ const (
 	postLikeCountFlushBatchSize        = 100
 	postLikeCountFallbackScheduleSize  = 100
 	postStatsCachePrefix               = "mysql:post:stats:"
+	postCounterTableDDL                = "CREATE TABLE IF NOT EXISTS post_counter (id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, post_id BIGINT NOT NULL, like_count INT NOT NULL DEFAULT 0, comment_count INT NOT NULL DEFAULT 0, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, UNIQUE KEY uk_post_id (post_id), KEY idx_like_count (like_count), KEY idx_comment_count (comment_count))"
 	counterFlushLogTableDDL            = "CREATE TABLE IF NOT EXISTS counter_flush_log (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, batch_id VARCHAR(128) NOT NULL, counter_type VARCHAR(32) NOT NULL, post_id BIGINT NOT NULL, delta BIGINT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uk_counter_flush_batch_id (batch_id))"
 	counterFlushLogInsertSQL           = "INSERT INTO counter_flush_log(batch_id, counter_type, post_id, delta) VALUES (?, ?, ?, ?)"
 )
@@ -471,13 +472,37 @@ func (js *JobWorker) applyPostCounterDeltaToDB(ctx context.Context, kind postCou
 			}
 			return err
 		}
-		sql := fmt.Sprintf("UPDATE post SET %s = GREATEST(%s + ?, 0) WHERE post_id = ?", kind.dbColumn, kind.dbColumn)
-		return tx.Exec(sql, delta, postID).Error
+
+		// 计数刷库只更新 post_counter，绝不更新 post。
+		// 后续 Canal 可以只监听 post/study_comment 的内容变化，避免热点点赞和评论数 update 冲击 ES 同步链路。
+		insertLikeCount, insertCommentCount := initialPostCounterValues(kind, delta)
+		sql := fmt.Sprintf(`INSERT INTO post_counter (post_id, like_count, comment_count)
+VALUES (?, ?, ?)
+ON DUPLICATE KEY UPDATE %s = GREATEST(%s + ?, 0)`, kind.dbColumn, kind.dbColumn)
+		return tx.Exec(sql, postID, insertLikeCount, insertCommentCount, delta).Error
 	})
+}
+
+func initialPostCounterValues(kind postCounterKind, delta int64) (int64, int64) {
+	if delta < 0 {
+		return 0, 0
+	}
+	switch kind.dbColumn {
+	case "like_count":
+		return delta, 0
+	case "comment_count":
+		return 0, delta
+	default:
+		return 0, 0
+	}
 }
 
 func ensureCounterFlushLogTable(db *gorm.DB) error {
 	counterFlushLogOnce.Do(func() {
+		if err := db.Exec(postCounterTableDDL).Error; err != nil {
+			counterFlushLogErr = err
+			return
+		}
 		counterFlushLogErr = db.Exec(counterFlushLogTableDDL).Error
 	})
 	return counterFlushLogErr

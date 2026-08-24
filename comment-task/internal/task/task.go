@@ -16,7 +16,7 @@ const (
 	// defaultPostLikeDirtyTopic 是点赞/取消点赞计数 dirty 通知的默认 topic。
 	//
 	// Canal 数据库变更继续使用 configs/config.yaml 中的 comment-service topic；
-	// postlike 只承载“某个 post_id 需要刷 like_count”的轻量通知，避免污染 Canal 消息流。
+	// postlike 只承载“某个 post_id 需要刷计数”的轻量通知，真正的计数落到 post_counter，避免污染 post 的 Canal 消息流。
 	defaultPostLikeDirtyTopic = "postlike"
 	// defaultPostLikeDirtyBroker 在本地未配置 Kafka broker 时兜底使用。
 	defaultPostLikeDirtyBroker = "localhost:9092"

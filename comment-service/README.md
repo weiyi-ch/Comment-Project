@@ -9,7 +9,20 @@
 - 运营端：审核评论、查询待审核列表、搜索评论、查看帖子和审核详情。
 - 帖子详情链路：帖子 Core/Stats 分离缓存，评论使用列表 ID 缓存 + `mysql:comment:{comment_id}` 对象缓存，读侧叠加 Redis pending/processing 计数 delta。
 - 搜索链路：MySQL 通过 Canal/Kafka 同步到 Elasticsearch，`comment-task` 回查 MySQL 最新数据构建 ES 文档，并用同步位点做幂等和乱序控制。
-- 热点计数：`post_like` 和评论记录同步保存事实数据，`post.like_count/comment_count` 通过 Redis pending/processing、Kafka dirty 通知和 `comment-task` zset 调度异步聚合落库。
+- 热点计数：`post_like` 和评论记录同步保存事实数据，`post_counter.like_count/comment_count` 通过 Redis pending/processing、Kafka dirty 通知和 `comment-task` zset 调度异步聚合落库，避免高频计数更新污染 `post` 表 binlog。
+
+## English Summary
+
+`comment-service` is the core service of the comment system. It provides student, tutor, and operator APIs for posts, comments, replies, search, moderation, and likes.
+
+Key capabilities:
+
+- Student workflows: post detail, post search, comment search, like/unlike, create comment, delete own comment, comment detail, comment list, and personal comments.
+- Tutor workflows: create/update/delete posts, view own posts, view comments, reply to comments, delete replies, and delete comments under owned posts.
+- Operator workflows: review comments, query pending moderation lists, search comments, and view post/moderation details.
+- Post detail reads use split Core/Stats caching. Counter values come from `post_counter` plus Redis pending/processing deltas.
+- Search synchronization uses Canal/Kafka and `comment-task`; ES writes use binlog position checks for idempotency and out-of-order protection.
+- Hot counters are no longer stored in `post`. Like/comment deltas are aggregated through Redis/Kafka and flushed into `post_counter`.
 
 ## 文档入口
 
@@ -58,4 +71,6 @@ SUMMARY_PATH=reports/k6/like-many.json \
 k6 run tools/k6/comment-service.js
 ```
 
-点赞/取消点赞/评论数是异步落库，压测结束后等待安静窗口和调度任务处理完成，再用 SQL 对比 `post.like_count/comment_count` 和事实表聚合计数。
+点赞/取消点赞/评论数是异步落库，压测结束后等待安静窗口和调度任务处理完成，再用 SQL 对比 `post_counter.like_count/comment_count` 和事实表聚合计数。
+
+Like/unlike/comment counters are flushed asynchronously. After a load test, wait for the quiet window and scheduled task processing, then compare `post_counter.like_count/comment_count` with the fact-table aggregation.

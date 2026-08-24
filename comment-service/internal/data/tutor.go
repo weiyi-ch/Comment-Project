@@ -97,9 +97,17 @@ func NewTutorRepo(data *Data, logger log.Logger) biz.TutorRepo {
 // 1. 创建成功后，把 post_id 加入 Bloom Filter；
 // 2. 不强制刷新帖子列表缓存，帖子列表缓存依赖短 TTL 自动过期。
 func (r *tutorRepo) CreatePost(ctx context.Context, post *model.Post) (*model.Post, error) {
-	p := r.data.q.Post
-
-	if err := p.WithContext(ctx).Create(post); err != nil {
+	err := r.data.q.Transaction(func(tx *query.Query) error {
+		p := tx.Post
+		// post 表只保存低频核心字段；计数初始化写入 post_counter，避免后续点赞/评论更新污染 post binlog。
+		if err := p.WithContext(ctx).Create(post); err != nil {
+			return err
+		}
+		return p.WithContext(ctx).UnderlyingDB().
+			Exec("INSERT IGNORE INTO post_counter (post_id, like_count, comment_count) VALUES (?, 0, 0)", post.PostID).
+			Error
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -689,24 +697,24 @@ func (r *tutorRepo) GetPostDetailWithComments(
 func (r *tutorRepo) queryPostByIDFromDB(ctx context.Context, postID int64) (*model.Post, error) {
 	p := r.data.q.Post
 
-	return p.WithContext(ctx).
-		Where(p.PostID.Eq(postID), p.Status.Eq(1), p.DeletedAt.IsNull()).
-		First()
-}
-
-func (r *tutorRepo) queryPostStatsByIDFromDB(ctx context.Context, postID int64) (*postStatsCache, error) {
-	p := r.data.q.Post
 	post, err := p.WithContext(ctx).
-		Select(p.LikeCount, p.CommentCount).
 		Where(p.PostID.Eq(postID), p.Status.Eq(1), p.DeletedAt.IsNull()).
 		First()
 	if err != nil {
 		return nil, err
 	}
-	return &postStatsCache{
-		LikeCount:    post.LikeCount,
-		CommentCount: post.CommentCount,
-	}, nil
+	if err := r.data.attachPersistedPostCounters(ctx, []*model.Post{post}); err != nil {
+		return nil, err
+	}
+	return post, nil
+}
+
+func (r *tutorRepo) queryPostStatsByIDFromDB(ctx context.Context, postID int64) (*postStatsCache, error) {
+	stats, err := r.data.queryPostCounterByID(ctx, postID)
+	if err != nil {
+		return nil, err
+	}
+	return stats, nil
 }
 
 // queryTutorPostsFromDB 从 MySQL 分页查询某个助教发布的帖子。
@@ -721,10 +729,17 @@ func (r *tutorRepo) queryTutorPostsFromDB(ctx context.Context, tutorID int64, pa
 	// offset 是 MySQL LIMIT/OFFSET 分页起点。
 	offset := int((pageNum - 1) * pageSize)
 
-	return p.WithContext(ctx).
+	posts, total, err := p.WithContext(ctx).
 		Where(p.AuthorID.Eq(tutorID), p.Status.Eq(1), p.DeletedAt.IsNull()).
 		Order(p.CreatedAt.Desc()).
 		FindByPage(offset, int(pageSize))
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := r.data.attachPostCounters(ctx, posts); err != nil {
+		return nil, 0, err
+	}
+	return posts, total, nil
 }
 
 // queryCommentByIDFromDB 从 MySQL 查询单条未删除评论。

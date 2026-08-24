@@ -20,7 +20,7 @@ var ProviderSet = wire.NewSet(NewDB, NewRedisClient, NewData, NewGreeterRepo)
 
 // Data 聚合后台任务依赖的外部数据资源。
 //
-// db 用于把 Redis 中聚合后的 like_count delta 落到 MySQL，cache 用于读取 service 写入的队列。
+// db 用于把 Redis 中聚合后的计数 delta 落到 post_counter，cache 用于读取 service 写入的队列。
 type Data struct {
 	db    *gorm.DB
 	cache *redis.Client
@@ -46,7 +46,7 @@ func NewData(db *gorm.DB, cache *redis.Client, logger log.Logger) (*Data, func()
 
 // NewDB 根据配置创建 GORM MySQL 连接。
 //
-// 点赞计数后台任务通过该连接批量更新 post.like_count。
+// 点赞/评论计数后台任务通过该连接批量更新 post_counter，避免更新 post 主表。
 func NewDB(cfg *conf.Data) (*gorm.DB, error) {
 	return gorm.Open(mysql.Open(cfg.GetDatabase().GetSource()))
 }

@@ -559,24 +559,24 @@ func (r *operatorRepo) queryPostByIDFromDB(ctx context.Context, postID int64) (*
 	p := r.data.q.Post
 
 	// 运营端可以查看所有状态帖子，这里不限制 status。
-	return p.WithContext(ctx).
-		Where(p.PostID.Eq(postID)).
-		First()
-}
-
-func (r *operatorRepo) queryPostStatsByIDFromDB(ctx context.Context, postID int64) (*postStatsCache, error) {
-	p := r.data.q.Post
 	post, err := p.WithContext(ctx).
-		Select(p.LikeCount, p.CommentCount).
 		Where(p.PostID.Eq(postID)).
 		First()
 	if err != nil {
 		return nil, err
 	}
-	return &postStatsCache{
-		LikeCount:    post.LikeCount,
-		CommentCount: post.CommentCount,
-	}, nil
+	if err := r.data.attachPersistedPostCounters(ctx, []*model.Post{post}); err != nil {
+		return nil, err
+	}
+	return post, nil
+}
+
+func (r *operatorRepo) queryPostStatsByIDFromDB(ctx context.Context, postID int64) (*postStatsCache, error) {
+	stats, err := r.data.queryPostCounterByID(ctx, postID)
+	if err != nil {
+		return nil, err
+	}
+	return stats, nil
 }
 
 // queryPostCommentsForOperatorFromDB 从 MySQL 查询帖子下所有未删除评论。

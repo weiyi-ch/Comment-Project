@@ -46,7 +46,7 @@ return added
 // enqueuePostLikeCountDelta 将点赞数变化写入 Redis，交给 comment-task 异步落库。
 //
 // delta 可以是 +1 或 -1：大量用户同时点赞/取消同一帖子时，请求链路不会同步更新
-// post.like_count，只做 Redis 原子累加并标记 dirty，避免所有请求争抢 post 表同一行锁。
+// post 表，只做 Redis 原子累加并标记 dirty，避免高频计数 update 污染 post 表 binlog。
 func (d *Data) enqueuePostLikeCountDelta(ctx context.Context, postID, delta int64) error {
 	if d.cache == nil || delta == 0 {
 		return nil
@@ -87,7 +87,7 @@ func (d *Data) notifyPostLikeCountDirty(ctx context.Context, postID int64) error
 
 // pendingPostLikeCountDelta 读取某个帖子的尚未落库点赞数增量。
 //
-// 读详情时用它叠加 MySQL 中的 like_count，让异步落库窗口内的展示值尽量接近实时。
+// 读详情时用它叠加 post_counter 中的 like_count，让异步落库窗口内的展示值尽量接近实时。
 func (d *Data) pendingPostLikeCountDelta(ctx context.Context, postID int64) int64 {
 	if d.cache == nil {
 		return 0
@@ -98,7 +98,7 @@ func (d *Data) pendingPostLikeCountDelta(ctx context.Context, postID int64) int6
 
 // applyPendingPostLikeCountDelta 把 Redis pending delta 合并到帖子模型上。
 //
-// MySQL 中的 like_count 是已落库值，Redis 中的 delta 是待刷库值；两者相加后返回给前端。
+// post_counter 中的 like_count 是已落库值，Redis 中的 delta 是待刷库值；两者相加后返回给前端。
 func (d *Data) applyPendingPostLikeCountDelta(ctx context.Context, post *model.Post) {
 	if post == nil {
 		return

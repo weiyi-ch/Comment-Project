@@ -6,7 +6,7 @@
 
 - 消费 Canal 写入的 Kafka topic `comment-service`，先按 ES 中的 `sync_binlog_file/sync_binlog_pos` 判断消息是否过期，再回查 MySQL 最新数据同步到 Elasticsearch。
 - 消费计数 dirty topic `postlike`，为点赞数和评论数计算下一次刷库时间，并写入 Redis 调度 zset。
-- 后台扫描 Redis 调度 zset，到期后再次校验 `dirty_at/dirty_since`，再领取 delta 异步更新 `post.like_count/comment_count`。
+- 后台扫描 Redis 调度 zset，到期后再次校验 `dirty_at/dirty_since`，再领取 delta 异步更新 `post_counter.like_count/comment_count`。
 - 低频扫描 Redis dirty 队列，补偿 Kafka dirty 通知发送失败或消费失败。
 
 ## 关键 Redis Key
@@ -61,3 +61,9 @@ kratos run
 ## 设计文档
 
 点赞计数异步落库的完整设计见 [comment-service/docs/post-like-async-counter-design.md](../comment-service/docs/post-like-async-counter-design.md)。
+
+## English Notes
+
+- `comment-task` consumes Canal messages from the `comment-service` topic and synchronizes MySQL row changes into Elasticsearch with binlog position checks.
+- It also consumes the `postlike` dirty topic, schedules quiet-window counter flushing in Redis, and writes aggregated like/comment deltas into `post_counter`.
+- Counter flushing does not update the `post` core table, so later Canal monitoring on `post` can focus on low-frequency content/status changes.

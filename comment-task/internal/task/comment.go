@@ -160,8 +160,7 @@ func buildPostESDoc(row map[string]interface{}) map[string]interface{} {
 	setString(doc, row, "content")
 
 	setInt32(doc, row, "status")
-	setInt32(doc, row, "like_count")
-	setInt32(doc, row, "comment_count")
+	// like_count/comment_count 已拆到 post_counter，post 的 Canal 文档只承载低频核心内容。
 
 	setNullableTime(doc, row, "created_at")
 	setNullableTime(doc, row, "updated_at")

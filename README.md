@@ -115,7 +115,8 @@ MySQL 首次启动会执行 `comment-service/sql/comment.sql` 初始化表结构
 - 读路径使用 Cache-Aside、singleflight、Redis MGET、MySQL IN 查询减少重复回源。
 - 已引入 RedisBloom，用于按 ID 查询时拦截明显不存在的帖子和评论。
 - 点赞关系事实数据同步写入 MySQL，保证用户是否点赞的正确性。
-- 点赞数和评论数通过 Redis delta 聚合，再由 `comment-task` 异步批量落库。
+- 点赞数和评论数已从 `post` 拆到 `post_counter`，避免高频计数更新污染后续 Canal 对 `post` 表的监听。
+- 点赞数和评论数通过 Redis delta 聚合，再由 `comment-task` 异步批量落到 `post_counter`。
 - MySQL 作为事实源，Elasticsearch 作为搜索读模型，`comment-task` 负责 Canal/Kafka 到 ES 的同步、重试和 DLQ。
 - 三端 BFF 已新增注册、登录、刷新 token 和登出接口，密码使用 bcrypt 哈希保存，不再保存明文密码。
 - 注册、登录、刷新 token 和登出由 BFF 调用 `comment-service` 的 AuthService 完成，账号与 refresh token session 落 MySQL。
@@ -146,6 +147,7 @@ MySQL 首次启动会执行 `comment-service/sql/comment.sql` 初始化表结构
 - [ ] 增加敏感词或机器审核模块。
 - [ ] 增加审核记录/操作审计表。
 - [ ] 增加 ES mapping 初始化脚本和全量重建脚本。
+- [ ] 增加 `post_like` / `study_comment` 到 `post_counter` 的定期计数校准任务。
 - [ ] 增加 MySQL 与 ES 定期对账任务。
 - [ ] 增加 RedisBloom 预热和重建任务。
 - [ ] 增加 Redis、Kafka、ES、MySQL 故障下的统一限流、降级、重试和补偿策略。
@@ -282,7 +284,8 @@ Note: Redis uses `7.4.0-v5`, and Elasticsearch/Kibana use `8.15.1`, because thes
 - Added Cache-Aside, singleflight, Redis MGET, and MySQL IN query patterns to reduce duplicate database fallback.
 - Added RedisBloom to reject clearly nonexistent post/comment IDs before database access.
 - Stored like relationship facts in MySQL to keep user-like state correct.
-- Aggregated like/comment counter deltas in Redis and flush them asynchronously through `comment-task`.
+- Split like/comment counters from `post` into `post_counter`, preventing high-frequency counter updates from polluting later Canal monitoring on the `post` table.
+- Aggregated like/comment counter deltas in Redis and flush them asynchronously into `post_counter` through `comment-task`.
 - Used MySQL as the source of truth and Elasticsearch as the search read model, with Canal/Kafka synchronization, retry, and DLQ handling.
 - Added registration, login, token refresh, and logout endpoints for all three BFF services. Passwords are stored with bcrypt hashes and never stored as plaintext.
 - Registration, login, token refresh, and logout are forwarded from BFF services to `comment-service` AuthService, where user accounts and refresh token sessions are persisted in MySQL.
@@ -313,6 +316,7 @@ Note: Redis uses `7.4.0-v5`, and Elasticsearch/Kibana use `8.15.1`, because thes
 - [ ] Add sensitive-word or machine-review modules.
 - [ ] Add moderation operation records and audit tables.
 - [ ] Add Elasticsearch mapping initialization and full-rebuild scripts.
+- [ ] Add scheduled counter reconciliation from `post_like` / `study_comment` into `post_counter`.
 - [ ] Add scheduled MySQL and Elasticsearch reconciliation tasks.
 - [ ] Add RedisBloom warm-up and rebuild tasks.
 - [ ] Add unified rate limiting, fallback, retry, and compensation strategies for Redis, Kafka, Elasticsearch, and MySQL failures.

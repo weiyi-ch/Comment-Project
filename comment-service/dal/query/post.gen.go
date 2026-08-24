@@ -34,8 +34,6 @@ func newPost(db *gorm.DB, opts ...gen.DOOption) post {
 	_post.Title = field.NewString(tableName, "title")
 	_post.Content = field.NewString(tableName, "content")
 	_post.Status = field.NewInt32(tableName, "status")
-	_post.LikeCount = field.NewInt32(tableName, "like_count")
-	_post.CommentCount = field.NewInt32(tableName, "comment_count")
 	_post.CreatedAt = field.NewTime(tableName, "created_at")
 	_post.UpdatedAt = field.NewTime(tableName, "updated_at")
 	_post.DeletedAt = field.NewField(tableName, "deleted_at")
@@ -49,18 +47,16 @@ func newPost(db *gorm.DB, opts ...gen.DOOption) post {
 type post struct {
 	postDo postDo
 
-	ALL          field.Asterisk
-	ID           field.Int64
-	PostID       field.Int64 // 知识帖ID
-	AuthorID     field.Int64 // 助教ID
-	Title        field.String
-	Content      field.String
-	Status       field.Int32 // 1已发布 2已下架/删除
-	LikeCount    field.Int32
-	CommentCount field.Int32 // 有效评论数
-	CreatedAt    field.Time
-	UpdatedAt    field.Time
-	DeletedAt    field.Field
+	ALL       field.Asterisk
+	ID        field.Int64
+	PostID    field.Int64 // 知识帖ID
+	AuthorID  field.Int64 // 助教ID
+	Title     field.String
+	Content   field.String
+	Status    field.Int32 // 1已发布 2已下架/删除
+	CreatedAt field.Time
+	UpdatedAt field.Time
+	DeletedAt field.Field
 
 	fieldMap map[string]field.Expr
 }
@@ -83,8 +79,6 @@ func (p *post) updateTableName(table string) *post {
 	p.Title = field.NewString(table, "title")
 	p.Content = field.NewString(table, "content")
 	p.Status = field.NewInt32(table, "status")
-	p.LikeCount = field.NewInt32(table, "like_count")
-	p.CommentCount = field.NewInt32(table, "comment_count")
 	p.CreatedAt = field.NewTime(table, "created_at")
 	p.UpdatedAt = field.NewTime(table, "updated_at")
 	p.DeletedAt = field.NewField(table, "deleted_at")
@@ -119,8 +113,6 @@ func (p *post) fillFieldMap() {
 	p.fieldMap["title"] = p.Title
 	p.fieldMap["content"] = p.Content
 	p.fieldMap["status"] = p.Status
-	p.fieldMap["like_count"] = p.LikeCount
-	p.fieldMap["comment_count"] = p.CommentCount
 	p.fieldMap["created_at"] = p.CreatedAt
 	p.fieldMap["updated_at"] = p.UpdatedAt
 	p.fieldMap["deleted_at"] = p.DeletedAt

@@ -197,6 +197,9 @@ func (r *searchRepo) SearchPostsFromES(ctx context.Context, param *biz.PostSearc
 	// 命中后直接返回 ES _source 转换好的业务对象，不再访问 ES。
 	cache, ok := r.getPostSearchCache(ctx, key)
 	if ok {
+		if err := r.data.attachBizPostCounters(ctx, cache.Items); err != nil {
+			return nil, 0, err
+		}
 		return cache.Items, cache.Total, nil
 	}
 
@@ -239,6 +242,9 @@ func (r *searchRepo) SearchPostsFromES(ctx context.Context, param *biz.PostSearc
 		return nil, 0, fmt.Errorf("invalid post search cache result")
 	}
 
+	if err := r.data.attachBizPostCounters(ctx, cache.Items); err != nil {
+		return nil, 0, err
+	}
 	return cache.Items, cache.Total, nil
 }
 

@@ -44,6 +44,9 @@
 ### 已完成工作
 
 - 已初始化 Git 仓库并推送到 GitHub：`https://github.com/weiyi-ch/Comment-Project.git`
+- 已配置 GitHub 仓库描述、topics、分支 ruleset 和合并后自动删除分支。
+- 已补充根目录 `LICENSE`、贡献说明、安全说明、PR 模板和 Issue 模板。
+- 已新增实现路线文档：`docs/implementation-roadmap.md`
 - 已拆分三端 BFF：`comment-student`、`comment-tutor`、`comment-operator`。
 - 已定义学生端、助教端、运营端和搜索相关 proto 接口。
 - 已实现学生端帖子详情、评论列表、发表评论、删除评论、点赞、取消点赞、我的评论、搜索等入口。
@@ -51,6 +54,8 @@
 - 已实现运营端待审核列表、审核详情、评论审核、运营视角详情查询等领域逻辑。
 - 帖子详情已做 Core/Stats 拆分缓存，评论列表已采用“列表 ID 缓存 + 评论对象缓存”的两级缓存结构。
 - 读路径使用 Cache-Aside、singleflight、Redis MGET、MySQL IN 查询减少重复回源。
+- 已引入 RedisBloom，用于按 ID 查询时拦截明显不存在的帖子和评论。
+- 点赞关系事实数据同步写入 MySQL，保证用户是否点赞的正确性。
 - 点赞数和评论数通过 Redis delta 聚合，再由 `comment-task` 异步批量落库。
 - MySQL 作为事实源，Elasticsearch 作为搜索读模型，`comment-task` 负责 Canal/Kafka 到 ES 的同步、重试和 DLQ。
 - 三端 BFF 已新增注册、登录、刷新 token 和登出接口，密码使用 bcrypt 哈希保存，不再保存明文密码。
@@ -143,6 +148,9 @@ This project is designed as more than a CRUD demo. It focuses on backend mechani
 ### Completed Work
 
 - Initialized the Git repository and pushed it to GitHub: `https://github.com/weiyi-ch/Comment-Project.git`
+- Completed GitHub repository description, topics, branch ruleset, and automatic branch deletion after merge.
+- Added root `LICENSE`, contribution guide, security policy, pull request template, and issue templates.
+- Added the implementation roadmap: `docs/implementation-roadmap.md`
 - Split the role-specific BFF services into `comment-student`, `comment-tutor`, and `comment-operator`.
 - Defined proto APIs for student, tutor, operator, and search workflows.
 - Implemented student-side entry points for post detail, comment list, comment creation/deletion, like/unlike, personal comments, and search.
@@ -150,6 +158,8 @@ This project is designed as more than a CRUD demo. It focuses on backend mechani
 - Implemented operator-side domain logic for pending moderation lists, moderation detail, comment review, and operator-view detail queries.
 - Added Core/Stats split caching for post details and two-level list/object caching for comment lists.
 - Added Cache-Aside, singleflight, Redis MGET, and MySQL IN query patterns to reduce duplicate database fallback.
+- Added RedisBloom to reject clearly nonexistent post/comment IDs before database access.
+- Stored like relationship facts in MySQL to keep user-like state correct.
 - Aggregated like/comment counter deltas in Redis and flush them asynchronously through `comment-task`.
 - Used MySQL as the source of truth and Elasticsearch as the search read model, with Canal/Kafka synchronization, retry, and DLQ handling.
 - Added registration, login, token refresh, and logout endpoints for all three BFF services. Passwords are stored with bcrypt hashes and never stored as plaintext.

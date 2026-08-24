@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Project Roadmap / 项目路线
+    url: https://github.com/weiyi-ch/Comment-Project/blob/main/docs/implementation-roadmap.md
+    about: Review planned work before opening a feature request. / 提交功能建议前可以先查看项目路线。

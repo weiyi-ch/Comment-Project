@@ -4,6 +4,7 @@ import (
 	v1 "comment-service/api/comment/v1"
 	"comment-service/internal/conf"
 	accesslog "comment-service/internal/middleware/accesslog"
+	authctx "comment-service/internal/middleware/authctx"
 	"comment-service/internal/mtls"
 	"comment-service/internal/service"
 
@@ -24,6 +25,7 @@ func NewGRPCServer(c *conf.Server, operatorService *service.OperatorService, tut
 			recovery.Recovery(),
 			tracing.Server(),
 			accesslog.Server(logger),
+			authctx.Server(),
 			validate.Validator(),
 		),
 	}

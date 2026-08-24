@@ -38,7 +38,19 @@ func NewDiscovery(reg *consul.Registry) registry.Discovery {
 	return reg
 }
 
-func NewHTTPServer(cfg conf.HTTP, student *service.StudentCommentService, logger log.Logger) *http.Server {
+func NewHTTPServer(cfg conf.HTTP, authCfg conf.Auth, student *service.StudentCommentService, logger log.Logger) *http.Server {
+	authSvc, err := auth.NewService(auth.Config{
+		Role:            authCfg.Role,
+		SigningSecret:   authCfg.SigningSecret,
+		StoreFile:       authCfg.StoreFile,
+		AccessTokenTTL:  authCfg.AccessTokenTTL,
+		RefreshTokenTTL: authCfg.RefreshTokenTTL,
+	})
+	if err != nil {
+		panic(err)
+	}
+	authHTTP := auth.NewHTTPService(authSvc)
+
 	srv := http.NewServer(
 		http.Address(cfg.Addr),
 		http.Timeout(cfg.Timeout),
@@ -53,7 +65,13 @@ func NewHTTPServer(cfg conf.HTTP, student *service.StudentCommentService, logger
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	router := srv.Route("/api/student", studentAuthFilter())
+	authRouter := srv.Route("/api/student/auth")
+	authRouter.POST("/register", authHTTP.Register)
+	authRouter.POST("/login", authHTTP.Login)
+	authRouter.POST("/refresh", authHTTP.Refresh)
+	authRouter.POST("/logout", authHTTP.Logout)
+
+	router := srv.Route("/api/student", studentAuthFilter(authSvc))
 	router.GET("/posts/{post_id}", student.GetPostDetail)
 	router.GET("/posts/{post_id}/comments", student.ListPostComments)
 	router.POST("/posts/{post_id}/comments", student.CreateComment)
@@ -68,10 +86,10 @@ func NewHTTPServer(cfg conf.HTTP, student *service.StudentCommentService, logger
 	return srv
 }
 
-func studentAuthFilter() http.FilterFunc {
+func studentAuthFilter(authSvc *auth.Service) http.FilterFunc {
 	return func(next stdhttp.Handler) stdhttp.Handler {
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-			p, err := auth.ParseStudentPrincipal(r)
+			p, err := authSvc.ParsePrincipal(r)
 			if err != nil {
 				stdhttp.Error(w, err.Error(), stdhttp.StatusUnauthorized)
 				return

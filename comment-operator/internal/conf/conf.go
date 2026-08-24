@@ -11,6 +11,7 @@ type Bootstrap struct {
 	Server   Server   `yaml:"server"`
 	Registry Registry `yaml:"registry"`
 	Client   Client   `yaml:"client"`
+	Auth     Auth     `yaml:"auth"`
 }
 
 type Server struct {
@@ -50,6 +51,14 @@ type Consul struct {
 	Scheme  string `yaml:"scheme"`
 }
 
+type Auth struct {
+	Role            string        `yaml:"role"`
+	SigningSecret   string        `yaml:"signing_secret"`
+	StoreFile       string        `yaml:"store_file"`
+	AccessTokenTTL  time.Duration `yaml:"access_token_ttl"`
+	RefreshTokenTTL time.Duration `yaml:"refresh_token_ttl"`
+}
+
 func Load(path string) (*Bootstrap, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -84,5 +93,20 @@ func (c *Bootstrap) applyDefaults() {
 	}
 	if c.Client.CommentService.TLS.Enabled && c.Client.CommentService.TLS.ServerName == "" {
 		c.Client.CommentService.TLS.ServerName = c.Client.CommentService.ServiceName
+	}
+	if c.Auth.Role == "" {
+		c.Auth.Role = "operator"
+	}
+	if c.Auth.SigningSecret == "" {
+		c.Auth.SigningSecret = "comment-operator-dev-secret"
+	}
+	if c.Auth.StoreFile == "" {
+		c.Auth.StoreFile = "data/comment-operator-auth.json"
+	}
+	if c.Auth.AccessTokenTTL <= 0 {
+		c.Auth.AccessTokenTTL = 15 * time.Minute
+	}
+	if c.Auth.RefreshTokenTTL <= 0 {
+		c.Auth.RefreshTokenTTL = 7 * 24 * time.Hour
 	}
 }

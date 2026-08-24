@@ -21,7 +21,7 @@ import (
 
 // Injectors from wire.go:
 
-func wireApp(confHTTP conf.HTTP, confRegistry conf.Registry, confComment conf.CommentService, logger log.Logger) (*kratos.App, func(), error) {
+func wireApp(confHTTP conf.HTTP, confAuth conf.Auth, confRegistry conf.Registry, confComment conf.CommentService, logger log.Logger) (*kratos.App, func(), error) {
 	registry := server.NewConsulRegistry(confRegistry)
 	registrar := server.NewRegistrar(registry)
 	discovery := server.NewDiscovery(registry)
@@ -30,7 +30,7 @@ func wireApp(confHTTP conf.HTTP, confRegistry conf.Registry, confComment conf.Co
 		return nil, nil, err
 	}
 	studentCommentService := service.NewStudentCommentService(commentClient, logger)
-	httpServer := server.NewHTTPServer(confHTTP, studentCommentService, logger)
+	httpServer := server.NewHTTPServer(confHTTP, confAuth, studentCommentService, logger)
 	app := newApp(logger, registrar, httpServer)
 	return app, func() {
 		cleanup()

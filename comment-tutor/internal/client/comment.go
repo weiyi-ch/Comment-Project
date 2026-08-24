@@ -3,16 +3,20 @@ package client
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	commentv1 "comment-tutor/api/comment/v1"
+	"comment-tutor/internal/auth"
 	"comment-tutor/internal/conf"
 	"comment-tutor/internal/mtls"
 
+	"github.com/go-kratos/kratos/v2/middleware"
 	"github.com/go-kratos/kratos/v2/middleware/tracing"
 	"github.com/go-kratos/kratos/v2/registry"
 	kgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/google/wire"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 var ProviderSet = wire.NewSet(NewCommentClient)
@@ -27,7 +31,7 @@ func NewCommentClient(cfg conf.CommentService, discovery registry.Discovery) (*C
 	endpoint := cfg.Endpoint
 	opts := []kgrpc.ClientOption{
 		kgrpc.WithTimeout(cfg.Timeout),
-		kgrpc.WithMiddleware(tracing.Client()),
+		kgrpc.WithMiddleware(tracing.Client(), identityForwarder()),
 	}
 	if endpoint == "" {
 		endpoint = fmt.Sprintf("discovery:///%s", cfg.ServiceName)
@@ -60,6 +64,22 @@ func NewCommentClient(cfg conf.CommentService, discovery registry.Discovery) (*C
 	return c, func() {
 		_ = c.Close()
 	}, nil
+}
+
+func identityForwarder() middleware.Middleware {
+	return func(handler middleware.Handler) middleware.Handler {
+		return func(ctx context.Context, req any) (any, error) {
+			if p, ok := auth.PrincipalFromContext(ctx); ok && p.UserID > 0 {
+				ctx = metadata.AppendToOutgoingContext(
+					ctx,
+					"x-user-id", strconv.FormatInt(p.UserID, 10),
+					"x-role", p.Role,
+					"x-token-id", p.TokenID,
+				)
+			}
+			return handler(ctx, req)
+		}
+	}
 }
 
 func (c *CommentClient) Close() error {

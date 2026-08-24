@@ -38,7 +38,19 @@ func NewDiscovery(reg *consul.Registry) registry.Discovery {
 	return reg
 }
 
-func NewHTTPServer(cfg conf.HTTP, tutor *service.TutorCommentService, logger log.Logger) *http.Server {
+func NewHTTPServer(cfg conf.HTTP, authCfg conf.Auth, tutor *service.TutorCommentService, logger log.Logger) *http.Server {
+	authSvc, err := auth.NewService(auth.Config{
+		Role:            authCfg.Role,
+		SigningSecret:   authCfg.SigningSecret,
+		StoreFile:       authCfg.StoreFile,
+		AccessTokenTTL:  authCfg.AccessTokenTTL,
+		RefreshTokenTTL: authCfg.RefreshTokenTTL,
+	})
+	if err != nil {
+		panic(err)
+	}
+	authHTTP := auth.NewHTTPService(authSvc)
+
 	srv := http.NewServer(
 		http.Address(cfg.Addr),
 		http.Timeout(cfg.Timeout),
@@ -53,7 +65,13 @@ func NewHTTPServer(cfg conf.HTTP, tutor *service.TutorCommentService, logger log
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	router := srv.Route("/api/tutor", tutorAuthFilter())
+	authRouter := srv.Route("/api/tutor/auth")
+	authRouter.POST("/register", authHTTP.Register)
+	authRouter.POST("/login", authHTTP.Login)
+	authRouter.POST("/refresh", authHTTP.Refresh)
+	authRouter.POST("/logout", authHTTP.Logout)
+
+	router := srv.Route("/api/tutor", tutorAuthFilter(authSvc))
 	router.GET("/posts", tutor.ListMyPosts)
 	router.POST("/posts", tutor.CreatePost)
 	router.GET("/posts/{post_id}", tutor.GetPostDetail)
@@ -70,10 +88,10 @@ func NewHTTPServer(cfg conf.HTTP, tutor *service.TutorCommentService, logger log
 	return srv
 }
 
-func tutorAuthFilter() http.FilterFunc {
+func tutorAuthFilter(authSvc *auth.Service) http.FilterFunc {
 	return func(next stdhttp.Handler) stdhttp.Handler {
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-			p, err := auth.ParseTutorPrincipal(r)
+			p, err := authSvc.ParsePrincipal(r)
 			if err != nil {
 				stdhttp.Error(w, err.Error(), stdhttp.StatusUnauthorized)
 				return

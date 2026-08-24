@@ -22,6 +22,7 @@ bin/
 
 # Local runtime config
 **/configs/config.yaml
+**/data/*.json
 
 # Generated mTLS material
 certs/mtls/*.key

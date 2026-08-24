@@ -25,8 +25,10 @@ const (
 	//
 	// task 用 dirty_at + 安静窗口和 dirty_since + 最大等待时间共同计算 nextFlushTime。
 	postLikeCountDirtySinceKey = "queue:post_like:dirty_since"
-	// postLikeCountProcessingKey 保存已被 task 领取、但还没有确认落库的 delta。
-	postLikeCountProcessingKey = "counter:post_like:processing"
+	// postLikeCountProcessingSumKey 保存已被 task 切成 batch、但还没有确认落库的总 delta。
+	//
+	// 详情读侧只需要 pending + processing_sum，不需要扫描每个 processing_batch。
+	postLikeCountProcessingSumKey = "counter:post_like:processing_sum"
 	// postLikeCountEnqueueTimeout 限制请求链路等待 Redis 计数入队的时间。
 	//
 	// post_like 是事实表，Redis 计数是异步冗余计数；远程 Redis 抖动时不能把点赞接口拖成 500。
@@ -69,9 +71,9 @@ func (d *Data) enqueuePostLikeCountDelta(ctx context.Context, postID, delta int6
 	// Lua 返回 1 表示该帖子刚从 clean 变 dirty，此时才需要发一条 Kafka 通知。
 	// 如果返回 0，说明已有 zset 调度或兜底扫描会处理，不重复发消息。
 	if redisInt64(raw) == 1 {
-		if err := d.notifyPostLikeCountDirty(ctx, postID); err != nil {
-			// Kafka 只是唤醒 task 的主通道，Redis dirty set 仍保留 post_id，低频兜底扫描会补偿。
-			d.log.WithContext(ctx).Warnf("notify post like count dirty failed, post_id=%d, err=%v", postID, err)
+		if err := d.recordCounterDirtyOutbox(enqueueCtx, postLikeDirtyEventType, postID); err != nil {
+			// outbox 失败时仍保留 Redis dirty set，comment-task 的定期扫描会兜底发现。
+			d.log.WithContext(ctx).Warnf("record post like count dirty outbox failed, post_id=%d, err=%v", postID, err)
 		}
 	}
 	return nil
@@ -93,7 +95,7 @@ func (d *Data) pendingPostLikeCountDelta(ctx context.Context, postID int64) int6
 		return 0
 	}
 
-	return d.counterDelta(ctx, postLikeCountDeltaKey, postLikeCountProcessingKey, postID, "post like")
+	return d.counterDelta(ctx, postLikeCountDeltaKey, postLikeCountProcessingSumKey, postID, "post like")
 }
 
 // applyPendingPostLikeCountDelta 把 Redis pending delta 合并到帖子模型上。

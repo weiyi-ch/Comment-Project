@@ -126,7 +126,7 @@ func (d *Data) attachBizPostCounters(ctx context.Context, posts []*biz.Post) err
 		}
 		stat := stats[post.PostID]
 		likeCount := int64(stat.LikeCount) + d.pendingPostLikeCountDelta(ctx, post.PostID)
-		commentCount := int64(stat.CommentCount) + d.counterDelta(ctx, postCommentCountDeltaKey, postCommentCountProcessingKey, post.PostID, "post comment")
+		commentCount := int64(stat.CommentCount) + d.counterDelta(ctx, postCommentCountDeltaKey, postCommentCountProcessingSumKey, post.PostID, "post comment")
 		if likeCount < 0 {
 			likeCount = 0
 		}

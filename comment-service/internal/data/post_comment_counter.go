@@ -9,11 +9,11 @@ import (
 )
 
 const (
-	postCommentCountDeltaKey      = "counter:post_comment:delta"
-	postCommentCountDirtyKey      = "queue:post_comment:dirty"
-	postCommentCountDirtyAtKey    = "queue:post_comment:dirty_at"
-	postCommentCountDirtySinceKey = "queue:post_comment:dirty_since"
-	postCommentCountProcessingKey = "counter:post_comment:processing"
+	postCommentCountDeltaKey         = "counter:post_comment:delta"
+	postCommentCountDirtyKey         = "queue:post_comment:dirty"
+	postCommentCountDirtyAtKey       = "queue:post_comment:dirty_at"
+	postCommentCountDirtySinceKey    = "queue:post_comment:dirty_since"
+	postCommentCountProcessingSumKey = "counter:post_comment:processing_sum"
 )
 
 // enqueuePostCommentCountDelta 聚合评论新增、删除和审核驳回产生的计数变化。
@@ -36,9 +36,9 @@ func (d *Data) enqueuePostCommentCountDelta(ctx context.Context, postID, delta i
 		return err
 	}
 
-	if redisInt64(raw) == 1 && d.postLikeDirtyWriter != nil {
-		if err := d.postLikeDirtyWriter.NotifyCommentCount(ctx, postID); err != nil {
-			d.log.WithContext(ctx).Warnf("notify post comment count dirty failed, post_id=%d, err=%v", postID, err)
+	if redisInt64(raw) == 1 {
+		if err := d.recordCounterDirtyOutbox(enqueueCtx, postCommentDirtyEventType, postID); err != nil {
+			d.log.WithContext(ctx).Warnf("record post comment count dirty outbox failed, post_id=%d, err=%v", postID, err)
 		}
 	}
 	return nil
@@ -69,7 +69,7 @@ func (d *Data) applyPendingPostCommentCountDelta(ctx context.Context, post *mode
 	if d.cache == nil || post == nil {
 		return
 	}
-	delta := d.counterDelta(ctx, postCommentCountDeltaKey, postCommentCountProcessingKey, post.PostID, "post comment")
+	delta := d.counterDelta(ctx, postCommentCountDeltaKey, postCommentCountProcessingSumKey, post.PostID, "post comment")
 	value := int64(post.CommentCount) + delta
 	if value < 0 {
 		value = 0

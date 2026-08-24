@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"fmt"
 
 	"comment-service/dal/query"
@@ -37,6 +38,7 @@ type Data struct {
 // 3. error：当前构造过程没有额外错误，保留给 Wire 统一签名。
 func NewData(db *gorm.DB, cache *redis.Client, es *elasticsearch.TypedClient, logger log.Logger) (*Data, func(), error) {
 	helper := log.NewHelper(logger)
+	outboxCtx, cancelOutbox := context.WithCancel(context.Background())
 	data := &Data{
 		db:                  db,
 		q:                   query.Q,
@@ -45,8 +47,10 @@ func NewData(db *gorm.DB, cache *redis.Client, es *elasticsearch.TypedClient, lo
 		log:                 log.NewHelper(logger),
 		postLikeDirtyWriter: newPostLikeDirtyWriterFromEnv(logger),
 	}
+	data.startCounterDirtyOutboxPublisher(outboxCtx)
 	cleanup := func() {
 		helper.Info("closing the data resources")
+		cancelOutbox()
 		if data.postLikeDirtyWriter != nil {
 			if err := data.postLikeDirtyWriter.Close(); err != nil {
 				helper.Warnf("close post like dirty kafka writer failed: %v", err)

@@ -18,7 +18,7 @@ import (
 // NewGRPCServer 创建并注册 gRPC Server。
 //
 // 返回值是 Kratos gRPC Server，内部已经注册 operator/student/tutor/search 四组 RPC 接口。
-func NewGRPCServer(c *conf.Server, operatorService *service.OperatorService, tutorService *service.TutorService, studentService *service.StudentService, searchService *service.SearchService, logger log.Logger) *grpc.Server {
+func NewGRPCServer(c *conf.Server, authService *service.AuthService, operatorService *service.OperatorService, tutorService *service.TutorService, studentService *service.StudentService, searchService *service.SearchService, logger log.Logger) *grpc.Server {
 	var opts = []grpc.ServerOption{
 		grpc.Middleware(
 			// gRPC 和 HTTP 使用同一套入口治理能力，保证压测和排障时日志字段一致。
@@ -50,6 +50,7 @@ func NewGRPCServer(c *conf.Server, operatorService *service.OperatorService, tut
 	}
 	srv := grpc.NewServer(opts...)
 	// 注册 proto 生成的 gRPC 服务描述，最终路由到对应 service 方法。
+	v1.RegisterAuthServiceServer(srv, authService)
 	v1.RegisterOperatorServiceServer(srv, operatorService)
 	v1.RegisterStudentServiceServer(srv, studentService)
 	v1.RegisterTutorServiceServer(srv, tutorService)

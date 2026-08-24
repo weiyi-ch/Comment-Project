@@ -1,63 +1,62 @@
 package auth
 
 import (
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
+
+	commentv1 "comment-operator/api/comment/v1"
+
+	"google.golang.org/grpc"
 )
 
-func TestTokenLifecycleAndPasswordHash(t *testing.T) {
-	storeFile := filepath.Join(t.TempDir(), "auth.json")
+type fakeAuthClient struct{}
+
+func (fakeAuthClient) Register(context.Context, *commentv1.RegisterRequest, ...grpc.CallOption) (*commentv1.TokenReply, error) {
+	return nil, nil
+}
+
+func (fakeAuthClient) Login(context.Context, *commentv1.LoginRequest, ...grpc.CallOption) (*commentv1.TokenReply, error) {
+	return nil, nil
+}
+
+func (fakeAuthClient) Refresh(context.Context, *commentv1.RefreshRequest, ...grpc.CallOption) (*commentv1.TokenReply, error) {
+	return nil, nil
+}
+
+func (fakeAuthClient) Logout(context.Context, *commentv1.LogoutRequest, ...grpc.CallOption) (*commentv1.LogoutReply, error) {
+	return nil, nil
+}
+
+func TestParsePrincipalValidatesAccessToken(t *testing.T) {
 	svc, err := NewService(Config{
-		Role:            operatorRole,
-		SigningSecret:   "test-secret",
-		StoreFile:       storeFile,
-		AccessTokenTTL:  time.Minute,
-		RefreshTokenTTL: time.Hour,
+		Role:          operatorRole,
+		SigningSecret: "test-secret",
+		AuthClient:    fakeAuthClient{},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	reply, err := svc.Register("alice", "password123")
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(storeFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(data), "password123") {
-		t.Fatal("password was stored in plaintext")
-	}
-	if !strings.Contains(string(data), "$2a$") && !strings.Contains(string(data), "$2b$") {
-		t.Fatal("bcrypt password hash was not stored")
-	}
-
+	token := signTestToken(t, "test-secret", claims{
+		TokenID:   "token-1",
+		UserID:    123,
+		Role:      operatorRole,
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(time.Minute).Unix(),
+	})
 	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Authorization", "Bearer "+reply.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+token)
 	p, err := svc.ParsePrincipal(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.UserID != reply.UserID || p.Role != operatorRole || p.TokenID == "" {
+	if p.UserID != 123 || p.Role != operatorRole || p.TokenID != "token-1" {
 		t.Fatalf("unexpected principal: %+v", p)
-	}
-
-	rotated, err := svc.Refresh(reply.RefreshToken)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := svc.Refresh(reply.RefreshToken); err == nil {
-		t.Fatal("old refresh token should be revoked after rotation")
-	}
-	if err := svc.Logout(rotated.RefreshToken); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := svc.Refresh(rotated.RefreshToken); err == nil {
-		t.Fatal("logged out refresh token should be revoked")
 	}
 }
 
@@ -65,7 +64,7 @@ func TestParsePrincipalRejectsUserIDHeaderOnly(t *testing.T) {
 	svc, err := NewService(Config{
 		Role:          operatorRole,
 		SigningSecret: "test-secret",
-		StoreFile:     filepath.Join(t.TempDir(), "auth.json"),
+		AuthClient:    fakeAuthClient{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -75,4 +74,18 @@ func TestParsePrincipalRejectsUserIDHeaderOnly(t *testing.T) {
 	if _, err := svc.ParsePrincipal(req); err == nil {
 		t.Fatal("x-user-id without bearer token should be rejected")
 	}
+}
+
+func signTestToken(t *testing.T, secret string, c claims) string {
+	t.Helper()
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
+	bodyData, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := base64.RawURLEncoding.EncodeToString(bodyData)
+	input := header + "." + body
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(input))
+	return input + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }

@@ -52,11 +52,8 @@ type Consul struct {
 }
 
 type Auth struct {
-	Role            string        `yaml:"role"`
-	SigningSecret   string        `yaml:"signing_secret"`
-	StoreFile       string        `yaml:"store_file"`
-	AccessTokenTTL  time.Duration `yaml:"access_token_ttl"`
-	RefreshTokenTTL time.Duration `yaml:"refresh_token_ttl"`
+	Role          string `yaml:"role"`
+	SigningSecret string `yaml:"signing_secret"`
 }
 
 func Load(path string) (*Bootstrap, error) {
@@ -99,14 +96,5 @@ func (c *Bootstrap) applyDefaults() {
 	}
 	if c.Auth.SigningSecret == "" {
 		c.Auth.SigningSecret = "comment-tutor-dev-secret"
-	}
-	if c.Auth.StoreFile == "" {
-		c.Auth.StoreFile = "data/comment-tutor-auth.json"
-	}
-	if c.Auth.AccessTokenTTL <= 0 {
-		c.Auth.AccessTokenTTL = 15 * time.Minute
-	}
-	if c.Auth.RefreshTokenTTL <= 0 {
-		c.Auth.RefreshTokenTTL = 7 * 24 * time.Hour
 	}
 }

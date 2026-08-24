@@ -19,6 +19,3 @@ client:
 auth:
   role: tutor
   signing_secret: comment-tutor-dev-secret
-  store_file: data/comment-tutor-auth.json
-  access_token_ttl: 15m
-  refresh_token_ttl: 168h

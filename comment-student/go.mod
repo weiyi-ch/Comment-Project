@@ -9,7 +9,6 @@ require (
 	github.com/google/wire v0.6.0
 	github.com/hashicorp/consul/api v1.34.1
 	go.uber.org/automaxprocs v1.5.1
-	golang.org/x/crypto v0.50.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20240822170219-fc7c04adadcd
 	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.34.2

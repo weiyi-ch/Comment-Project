@@ -2,13 +2,12 @@
 // versions:
 // - protoc-gen-go-http v2.9.2
 // - protoc             v7.34.0
-// source: api/comment/v1/comment.proto
+// source: comment/v1/comment.proto
 
 package v1
 
 import (
 	context "context"
-
 	http "github.com/go-kratos/kratos/v2/transport/http"
 	binding "github.com/go-kratos/kratos/v2/transport/http/binding"
 )
@@ -19,6 +18,181 @@ var _ = new(context.Context)
 var _ = binding.EncodeURL
 
 const _ = http.SupportPackageIsVersion1
+
+const OperationAuthServiceLogin = "/api.comment.v1.AuthService/Login"
+const OperationAuthServiceLogout = "/api.comment.v1.AuthService/Logout"
+const OperationAuthServiceRefresh = "/api.comment.v1.AuthService/Refresh"
+const OperationAuthServiceRegister = "/api.comment.v1.AuthService/Register"
+
+type AuthServiceHTTPServer interface {
+	Login(context.Context, *LoginRequest) (*TokenReply, error)
+	Logout(context.Context, *LogoutRequest) (*LogoutReply, error)
+	Refresh(context.Context, *RefreshRequest) (*TokenReply, error)
+	Register(context.Context, *RegisterRequest) (*TokenReply, error)
+}
+
+func RegisterAuthServiceHTTPServer(s *http.Server, srv AuthServiceHTTPServer) {
+	r := s.Route("/")
+	r.POST("/v1/auth/register", _AuthService_Register0_HTTP_Handler(srv))
+	r.POST("/v1/auth/login", _AuthService_Login0_HTTP_Handler(srv))
+	r.POST("/v1/auth/refresh", _AuthService_Refresh0_HTTP_Handler(srv))
+	r.POST("/v1/auth/logout", _AuthService_Logout0_HTTP_Handler(srv))
+}
+
+func _AuthService_Register0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in RegisterRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceRegister)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.Register(ctx, req.(*RegisterRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*TokenReply)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_Login0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in LoginRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceLogin)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.Login(ctx, req.(*LoginRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*TokenReply)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_Refresh0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in RefreshRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceRefresh)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.Refresh(ctx, req.(*RefreshRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*TokenReply)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_Logout0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in LogoutRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceLogout)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.Logout(ctx, req.(*LogoutRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*LogoutReply)
+		return ctx.Result(200, reply)
+	}
+}
+
+type AuthServiceHTTPClient interface {
+	Login(ctx context.Context, req *LoginRequest, opts ...http.CallOption) (rsp *TokenReply, err error)
+	Logout(ctx context.Context, req *LogoutRequest, opts ...http.CallOption) (rsp *LogoutReply, err error)
+	Refresh(ctx context.Context, req *RefreshRequest, opts ...http.CallOption) (rsp *TokenReply, err error)
+	Register(ctx context.Context, req *RegisterRequest, opts ...http.CallOption) (rsp *TokenReply, err error)
+}
+
+type AuthServiceHTTPClientImpl struct {
+	cc *http.Client
+}
+
+func NewAuthServiceHTTPClient(client *http.Client) AuthServiceHTTPClient {
+	return &AuthServiceHTTPClientImpl{client}
+}
+
+func (c *AuthServiceHTTPClientImpl) Login(ctx context.Context, in *LoginRequest, opts ...http.CallOption) (*TokenReply, error) {
+	var out TokenReply
+	pattern := "/v1/auth/login"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationAuthServiceLogin))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *AuthServiceHTTPClientImpl) Logout(ctx context.Context, in *LogoutRequest, opts ...http.CallOption) (*LogoutReply, error) {
+	var out LogoutReply
+	pattern := "/v1/auth/logout"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationAuthServiceLogout))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *AuthServiceHTTPClientImpl) Refresh(ctx context.Context, in *RefreshRequest, opts ...http.CallOption) (*TokenReply, error) {
+	var out TokenReply
+	pattern := "/v1/auth/refresh"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationAuthServiceRefresh))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *AuthServiceHTTPClientImpl) Register(ctx context.Context, in *RegisterRequest, opts ...http.CallOption) (*TokenReply, error) {
+	var out TokenReply
+	pattern := "/v1/auth/register"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationAuthServiceRegister))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
 
 const OperationTutorServiceCreatePost = "/api.comment.v1.TutorService/CreatePost"
 const OperationTutorServiceDeleteCommentTutor = "/api.comment.v1.TutorService/DeleteCommentTutor"

@@ -15,12 +15,13 @@ import (
 )
 
 // ProviderSet 声明 data 层可被 wire 注入的构造函数集合。
-var ProviderSet = wire.NewSet(NewRedisClient, NewDB, NewES, NewData, NewOperatorRepo, NewTutorRepo, NewStudentRepo, NewSearchRepo)
+var ProviderSet = wire.NewSet(NewRedisClient, NewDB, NewES, NewData, NewAuthRepo, NewOperatorRepo, NewTutorRepo, NewStudentRepo, NewSearchRepo)
 
 // Data 聚合 data 层需要访问的外部资源。
 //
 // q 是 gorm/gen 生成的查询入口，cache 是 Redis 客户端，es 是 Elasticsearch TypedClient。
 type Data struct {
+	db                  *gorm.DB
 	q                   *query.Query
 	cache               *redis.Client
 	es                  *elasticsearch.TypedClient
@@ -37,6 +38,7 @@ type Data struct {
 func NewData(db *gorm.DB, cache *redis.Client, es *elasticsearch.TypedClient, logger log.Logger) (*Data, func(), error) {
 	helper := log.NewHelper(logger)
 	data := &Data{
+		db:                  db,
 		q:                   query.Q,
 		cache:               cache,
 		es:                  es,

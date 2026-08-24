@@ -39,6 +39,9 @@ func wireApp(confServer *conf.Server, registry *conf.Registry, elasticsearch *co
 	if err != nil {
 		return nil, nil, err
 	}
+	authRepo := data.NewAuthRepo(dataData, logger)
+	authUsecase := biz.NewAuthUsecase(authRepo, logger)
+	authService := service.NewAuthService(authUsecase, logger)
 	operatorRepo := data.NewOperatorRepo(dataData, logger)
 	operatorUsecase := biz.NewOperatorUsecase(operatorRepo, logger)
 	operatorService := service.NewOperatorService(operatorUsecase, logger)
@@ -51,8 +54,8 @@ func wireApp(confServer *conf.Server, registry *conf.Registry, elasticsearch *co
 	searchRepo := data.NewSearchRepo(dataData, logger)
 	searchUsecase := biz.NewSearchUsecase(searchRepo, logger)
 	searchService := service.NewSearchService(searchUsecase, logger)
-	grpcServer := server.NewGRPCServer(confServer, operatorService, tutorService, studentService, searchService, logger)
-	httpServer := server.NewHTTPServer(confServer, operatorService, tutorService, studentService, searchService, logger)
+	grpcServer := server.NewGRPCServer(confServer, authService, operatorService, tutorService, studentService, searchService, logger)
+	httpServer := server.NewHTTPServer(confServer, authService, operatorService, tutorService, studentService, searchService, logger)
 	app := newApp(logger, registrar, grpcServer, httpServer)
 	return app, func() {
 		cleanup()

@@ -16,7 +16,7 @@ import (
 // NewHTTPServer 创建并注册 HTTP Server。
 //
 // 返回值是 Kratos HTTP Server，内部已经注册 operator/student/tutor/search 四组 HTTP 接口。
-func NewHTTPServer(c *conf.Server, operatorService *service.OperatorService, tutorService *service.TutorService, studentService *service.StudentService, searchService *service.SearchService, logger log.Logger) *http.Server {
+func NewHTTPServer(c *conf.Server, authService *service.AuthService, operatorService *service.OperatorService, tutorService *service.TutorService, studentService *service.StudentService, searchService *service.SearchService, logger log.Logger) *http.Server {
 	var opts = []http.ServerOption{
 		http.Middleware(
 			// 中间件顺序代表请求进入业务前的处理顺序：
@@ -44,6 +44,7 @@ func NewHTTPServer(c *conf.Server, operatorService *service.OperatorService, tut
 	}
 	srv := http.NewServer(opts...)
 	// 注册 proto 生成的 HTTP 路由，路由最终会调用对应 service 方法。
+	v1.RegisterAuthServiceHTTPServer(srv, authService)
 	v1.RegisterOperatorServiceHTTPServer(srv, operatorService)
 	v1.RegisterStudentServiceHTTPServer(srv, studentService)
 	v1.RegisterTutorServiceHTTPServer(srv, tutorService)

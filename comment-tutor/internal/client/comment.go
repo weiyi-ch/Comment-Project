@@ -23,6 +23,7 @@ var ProviderSet = wire.NewSet(NewCommentClient)
 
 type CommentClient struct {
 	conn   *grpc.ClientConn
+	Auth   commentv1.AuthServiceClient
 	Tutor  commentv1.TutorServiceClient
 	Search commentv1.SearchServiceClient
 }
@@ -58,6 +59,7 @@ func NewCommentClient(cfg conf.CommentService, discovery registry.Discovery) (*C
 	}
 	c := &CommentClient{
 		conn:   conn,
+		Auth:   commentv1.NewAuthServiceClient(conn),
 		Tutor:  commentv1.NewTutorServiceClient(conn),
 		Search: commentv1.NewSearchServiceClient(conn),
 	}

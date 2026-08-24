@@ -19,6 +19,3 @@ client:
 auth:
   role: operator
   signing_secret: comment-operator-dev-secret
-  store_file: data/comment-operator-auth.json
-  access_token_ttl: 15m
-  refresh_token_ttl: 168h

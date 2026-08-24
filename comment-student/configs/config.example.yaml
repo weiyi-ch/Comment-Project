@@ -19,6 +19,3 @@ client:
 auth:
   role: student
   signing_secret: comment-student-dev-secret
-  store_file: data/comment-student-auth.json
-  access_token_ttl: 15m
-  refresh_token_ttl: 168h

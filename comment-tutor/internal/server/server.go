@@ -4,6 +4,7 @@ import (
 	stdhttp "net/http"
 
 	"comment-tutor/internal/auth"
+	"comment-tutor/internal/client"
 	"comment-tutor/internal/conf"
 	"comment-tutor/internal/service"
 
@@ -38,13 +39,11 @@ func NewDiscovery(reg *consul.Registry) registry.Discovery {
 	return reg
 }
 
-func NewHTTPServer(cfg conf.HTTP, authCfg conf.Auth, tutor *service.TutorCommentService, logger log.Logger) *http.Server {
+func NewHTTPServer(cfg conf.HTTP, authCfg conf.Auth, comment *client.CommentClient, tutor *service.TutorCommentService, logger log.Logger) *http.Server {
 	authSvc, err := auth.NewService(auth.Config{
-		Role:            authCfg.Role,
-		SigningSecret:   authCfg.SigningSecret,
-		StoreFile:       authCfg.StoreFile,
-		AccessTokenTTL:  authCfg.AccessTokenTTL,
-		RefreshTokenTTL: authCfg.RefreshTokenTTL,
+		Role:          authCfg.Role,
+		SigningSecret: authCfg.SigningSecret,
+		AuthClient:    comment.Auth,
 	})
 	if err != nil {
 		panic(err)

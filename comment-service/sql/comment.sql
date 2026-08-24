@@ -2,6 +2,36 @@ CREATE DATABASE IF NOT EXISTS comment DEFAULT CHARACTER SET utf8mb4 COLLATE utf8
 
 USE comment;
 
+CREATE TABLE IF NOT EXISTS user_account (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL COMMENT '业务用户ID',
+    username VARCHAR(64) NOT NULL COMMENT '登录用户名',
+    role VARCHAR(32) NOT NULL COMMENT 'student/tutor/operator',
+    password_hash VARCHAR(128) NOT NULL COMMENT 'bcrypt密码哈希',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '1启用 2禁用',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_user_id (user_id),
+    UNIQUE KEY uk_role_username (role, username),
+    KEY idx_role_status_ct (role, status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户账号表';
+
+CREATE TABLE IF NOT EXISTS refresh_token_session (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    token_id VARCHAR(64) NOT NULL COMMENT 'refresh token ID',
+    user_id BIGINT NOT NULL COMMENT '业务用户ID',
+    role VARCHAR(32) NOT NULL COMMENT 'student/tutor/operator',
+    token_hash CHAR(64) NOT NULL COMMENT 'refresh token secret SHA-256',
+    expires_at DATETIME NOT NULL COMMENT '过期时间',
+    revoked TINYINT NOT NULL DEFAULT 0 COMMENT '0有效 1已撤销',
+    replaced_by VARCHAR(64) DEFAULT NULL COMMENT '轮换后的新token_id',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_token_id (token_id),
+    KEY idx_user_role_revoked (user_id, role, revoked),
+    KEY idx_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='刷新令牌会话表';
+
 CREATE TABLE IF NOT EXISTS post (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     post_id BIGINT NOT NULL COMMENT '知识帖ID',

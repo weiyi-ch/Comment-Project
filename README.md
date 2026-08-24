@@ -59,6 +59,7 @@
 - 点赞数和评论数通过 Redis delta 聚合，再由 `comment-task` 异步批量落库。
 - MySQL 作为事实源，Elasticsearch 作为搜索读模型，`comment-task` 负责 Canal/Kafka 到 ES 的同步、重试和 DLQ。
 - 三端 BFF 已新增注册、登录、刷新 token 和登出接口，密码使用 bcrypt 哈希保存，不再保存明文密码。
+- 注册、登录、刷新 token 和登出由 BFF 调用 `comment-service` 的 AuthService 完成，账号与 refresh token session 落 MySQL。
 - access token 使用短有效期签名 token，携带 `user_id`、`role`、`token_id`。
 - refresh token 使用服务端存储的哈希值，支持轮换、撤销和登出。
 - 三端 `internal/auth` 已不再信任 `x-user-id`，只从 Bearer access token 解析可信身份。
@@ -163,6 +164,7 @@ This project is designed as more than a CRUD demo. It focuses on backend mechani
 - Aggregated like/comment counter deltas in Redis and flush them asynchronously through `comment-task`.
 - Used MySQL as the source of truth and Elasticsearch as the search read model, with Canal/Kafka synchronization, retry, and DLQ handling.
 - Added registration, login, token refresh, and logout endpoints for all three BFF services. Passwords are stored with bcrypt hashes and never stored as plaintext.
+- Registration, login, token refresh, and logout are forwarded from BFF services to `comment-service` AuthService, where user accounts and refresh token sessions are persisted in MySQL.
 - Added short-lived signed access tokens containing `user_id`, `role`, and `token_id`.
 - Added server-side refresh token storage by token hash, with refresh token rotation, revocation, and logout support.
 - Updated all three `internal/auth` packages so they no longer trust `x-user-id`; identity is parsed only from Bearer access tokens.

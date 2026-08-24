@@ -8,9 +8,39 @@ package api.comment.v1;
 
 import "google/api/annotations.proto";
 import "validate/validate.proto";
-option go_package = "comment-operator/api/comment/v1;v1";
+option go_package = "comment-service/api/comment/v1;v1";
 option java_multiple_files = true;
 option java_package = "api.comment.v1";
+
+// ==============================================================================
+// 0. 认证服务 (Auth Service)
+// ==============================================================================
+service AuthService {
+  rpc Register(RegisterRequest) returns (TokenReply) {
+    option (google.api.http) = {
+      post: "/v1/auth/register"
+      body: "*"
+    };
+  }
+  rpc Login(LoginRequest) returns (TokenReply) {
+    option (google.api.http) = {
+      post: "/v1/auth/login"
+      body: "*"
+    };
+  }
+  rpc Refresh(RefreshRequest) returns (TokenReply) {
+    option (google.api.http) = {
+      post: "/v1/auth/refresh"
+      body: "*"
+    };
+  }
+  rpc Logout(LogoutRequest) returns (LogoutReply) {
+    option (google.api.http) = {
+      post: "/v1/auth/logout"
+      body: "*"
+    };
+  }
+}
 
 // ==============================================================================
 // 1. 助教端服务 (Tutor Service)
@@ -178,6 +208,43 @@ message ReplyDTO {
   string content = 4;
   int64 created_at = 5;
 }
+
+// ==============================================================================
+// 认证 Request / Reply
+// ==============================================================================
+
+message RegisterRequest {
+  string username = 1 [(validate.rules).string = {min_len: 1, max_len: 64}];
+  string password = 2 [(validate.rules).string = {min_len: 8, max_len: 128}];
+  string role = 3 [(validate.rules).string = {in: ["student", "tutor", "operator"]}];
+}
+
+message LoginRequest {
+  string username = 1 [(validate.rules).string = {min_len: 1, max_len: 64}];
+  string password = 2 [(validate.rules).string = {min_len: 8, max_len: 128}];
+  string role = 3 [(validate.rules).string = {in: ["student", "tutor", "operator"]}];
+}
+
+message RefreshRequest {
+  string refresh_token = 1 [(validate.rules).string = {min_len: 1}];
+  string role = 2 [(validate.rules).string = {in: ["student", "tutor", "operator"]}];
+}
+
+message LogoutRequest {
+  string refresh_token = 1 [(validate.rules).string = {min_len: 1}];
+  string role = 2 [(validate.rules).string = {in: ["student", "tutor", "operator"]}];
+}
+
+message TokenReply {
+  int64 user_id = 1;
+  string role = 2;
+  string access_token = 3;
+  int64 access_token_expires_at = 4;
+  string refresh_token = 5;
+  int64 refresh_token_expires_at = 6;
+}
+
+message LogoutReply {}
 
 // ==============================================================================
 // 助教端 Request / Reply

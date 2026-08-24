@@ -30,7 +30,7 @@ func wireApp(confHTTP conf.HTTP, confAuth conf.Auth, confRegistry conf.Registry,
 		return nil, nil, err
 	}
 	studentCommentService := service.NewStudentCommentService(commentClient, logger)
-	httpServer := server.NewHTTPServer(confHTTP, confAuth, studentCommentService, logger)
+	httpServer := server.NewHTTPServer(confHTTP, confAuth, commentClient, studentCommentService, logger)
 	app := newApp(logger, registrar, httpServer)
 	return app, func() {
 		cleanup()

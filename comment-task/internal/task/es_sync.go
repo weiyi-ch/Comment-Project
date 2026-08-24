@@ -135,55 +135,55 @@ func (js *JobWorker) processCanalRow(ctx context.Context, table, eventType strin
 		return nil
 	}
 
-	doc, shouldIndex, err := js.buildLatestESDoc(ctx, table, docID, eventType)
+	doc, err := js.buildLatestESDoc(ctx, table, docID, eventType)
 	if err != nil {
 		return err
 	}
 	decorateESSyncDoc(doc, eventType, version)
 
-	if shouldIndex {
-		return js.indexDocument(ctx, docID, doc, targetIndex)
-	}
 	return js.indexDocument(ctx, docID, doc, targetIndex)
 }
 
-func (js *JobWorker) buildLatestESDoc(ctx context.Context, table, docID, eventType string) (map[string]interface{}, bool, error) {
+func (js *JobWorker) buildLatestESDoc(ctx context.Context, table, docID, eventType string) (map[string]interface{}, error) {
 	switch table {
 	case "post":
 		postID, _ := strconv.ParseInt(docID, 10, 64)
 		var post postSearchRow
 		err := js.data.DB().WithContext(ctx).Unscoped().Table("post").Where("post_id = ?", postID).Take(&post).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) || strings.EqualFold(eventType, "DELETE") {
+			// 删除事件写 tombstone 文档而不是物理 delete。
+			// tombstone 保留 sync_version，能挡住后续晚到的旧 UPDATE 重试消息。
 			return map[string]interface{}{
 				"post_id":    postID,
 				"status":     int32(2),
 				"deleted_at": time.Now().Format("2006-01-02 15:04:05"),
-			}, true, nil
+			}, nil
 		}
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
-		return buildPostESDocFromDB(post), true, nil
+		return buildPostESDocFromDB(post), nil
 
 	case "study_comment":
 		commentID, _ := strconv.ParseInt(docID, 10, 64)
 		var comment studyCommentSearchRow
 		err := js.data.DB().WithContext(ctx).Unscoped().Table("study_comment").Where("comment_id = ?", commentID).Take(&comment).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) || strings.EqualFold(eventType, "DELETE") {
+			// 评论同样写不可见 tombstone，搜索查询侧通过 visible/audit/deleted_at 过滤。
 			return map[string]interface{}{
 				"comment_id":     commentID,
 				"visible_status": int32(2),
 				"audit_status":   int32(2),
 				"deleted_at":     time.Now().Format("2006-01-02 15:04:05"),
-			}, true, nil
+			}, nil
 		}
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
-		return buildStudyCommentESDocFromDB(comment), true, nil
+		return buildStudyCommentESDocFromDB(comment), nil
 
 	default:
-		return nil, false, fmt.Errorf("unsupported es sync table=%s", table)
+		return nil, fmt.Errorf("unsupported es sync table=%s", table)
 	}
 }
 

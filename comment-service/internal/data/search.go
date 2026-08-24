@@ -141,15 +141,13 @@ type commentSearchCache struct {
 // 2. 字段名必须和 ES 文档字段保持一致；
 // 3. 如果 Canal 同步字段名变化，这里的 json tag 也要同步改。
 type postESDoc struct {
-	PostID       int64       `json:"post_id"`
-	AuthorID     int64       `json:"author_id"`
-	Title        string      `json:"title"`
-	Content      string      `json:"content"`
-	Status       int32       `json:"status"`
-	LikeCount    int32       `json:"like_count"`
-	CommentCount int32       `json:"comment_count"`
-	CreatedAt    interface{} `json:"created_at"`
-	UpdatedAt    interface{} `json:"updated_at"`
+	PostID    int64       `json:"post_id"`
+	AuthorID  int64       `json:"author_id"`
+	Title     string      `json:"title"`
+	Content   string      `json:"content"`
+	Status    int32       `json:"status"`
+	CreatedAt interface{} `json:"created_at"`
+	UpdatedAt interface{} `json:"updated_at"`
 }
 
 // commentESDoc 对应 ES 中 study_comment 索引的 _source。
@@ -546,14 +544,12 @@ func extractPostsFromHits(hits *types.HitsMetadata) ([]*biz.Post, int64, error) 
 		}
 
 		posts = append(posts, &biz.Post{
-			PostID:       doc.PostID,
-			AuthorID:     doc.AuthorID,
-			Title:        doc.Title,
-			Content:      doc.Content,
-			Status:       doc.Status,
-			LikeCount:    doc.LikeCount,
-			CommentCount: doc.CommentCount,
-			CreatedAt:    parseESTimeMilli(doc.CreatedAt),
+			PostID:    doc.PostID,
+			AuthorID:  doc.AuthorID,
+			Title:     doc.Title,
+			Content:   doc.Content,
+			Status:    doc.Status,
+			CreatedAt: parseESTimeMilli(doc.CreatedAt),
 		})
 	}
 

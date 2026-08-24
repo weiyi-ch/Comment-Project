@@ -104,6 +104,37 @@ CREATE TABLE IF NOT EXISTS counter_reconcile_log (
     KEY idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='计数校准日志表';
 
+CREATE TABLE IF NOT EXISTS es_sync_retry (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    table_name VARCHAR(64) NOT NULL COMMENT '来源表名',
+    event_type VARCHAR(16) NOT NULL COMMENT 'Canal事件类型',
+    doc_id VARCHAR(64) NOT NULL COMMENT 'ES文档ID',
+    target_index VARCHAR(64) NOT NULL COMMENT 'ES索引名',
+    binlog_file VARCHAR(128) NOT NULL COMMENT 'MySQL binlog文件',
+    binlog_pos BIGINT NOT NULL COMMENT 'MySQL binlog位点',
+    payload JSON NOT NULL COMMENT '重试所需原始payload',
+    retry_count INT NOT NULL DEFAULT 0 COMMENT '已重试次数',
+    next_retry_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '下次允许重试时间',
+    last_error TEXT NULL COMMENT '最近一次失败原因',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_es_sync_retry_due (next_retry_at),
+    KEY idx_es_sync_retry_doc (target_index, doc_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ES同步失败重试表';
+
+CREATE TABLE IF NOT EXISTS es_sync_dlq (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    table_name VARCHAR(64) NOT NULL COMMENT '来源表名',
+    event_type VARCHAR(16) NOT NULL COMMENT 'Canal事件类型',
+    doc_id VARCHAR(64) NOT NULL COMMENT 'ES文档ID',
+    target_index VARCHAR(64) NOT NULL COMMENT 'ES索引名',
+    binlog_file VARCHAR(128) NOT NULL COMMENT 'MySQL binlog文件',
+    binlog_pos BIGINT NOT NULL COMMENT 'MySQL binlog位点',
+    payload JSON NOT NULL COMMENT '死信原始payload',
+    last_error TEXT NULL COMMENT '失败原因',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ES同步死信表';
+
 CREATE TABLE IF NOT EXISTS post_like (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     post_id BIGINT NOT NULL COMMENT '知识帖ID',

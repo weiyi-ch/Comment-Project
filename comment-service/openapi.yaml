@@ -1,0 +1,1188 @@
+# Generated with protoc-gen-openapi
+# https://github.com/google/gnostic/tree/master/cmd/protoc-gen-openapi
+
+openapi: 3.0.3
+info:
+    title: ""
+    version: 0.0.1
+paths:
+    /v1/operator/comments/pending:
+        get:
+            tags:
+                - OperatorService
+            operationId: OperatorService_ListPendingComments
+            parameters:
+                - name: operatorId
+                  in: query
+                  schema:
+                    type: string
+                - name: pageNum
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: auditStatus
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListPendingCommentsReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/operator/comments/{commentId}/audit:
+        get:
+            tags:
+                - OperatorService
+            operationId: OperatorService_GetCommentAuditDetail
+            parameters:
+                - name: commentId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: operatorId
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetCommentAuditDetailReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        post:
+            tags:
+                - OperatorService
+            operationId: OperatorService_AuditComment
+            parameters:
+                - name: commentId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AuditCommentRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuditCommentReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/operator/posts/{postId}:
+        get:
+            tags:
+                - OperatorService
+            operationId: OperatorService_GetPostDetailOperator
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: userId
+                  in: query
+                  description: 详情页通常需要带上当前操作者ID，用于判断“我是否点赞过”、“我是否有权修改”
+                  schema:
+                    type: string
+                - name: commentPageNum
+                  in: query
+                  description: 分页参数：因为帖子下可能有成千上万条评论，详情接口通常只返回第一页评论
+                  schema:
+                    type: integer
+                    format: int32
+                - name: commentPageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetPostDetailReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/operator/search/comments:
+        get:
+            tags:
+                - SearchService
+            description: '场景 6 & 7: 运营全能审核工作台检索 (查待审、查历史审核记录、违规溯源)'
+            operationId: SearchService_SearchOperatorComments
+            parameters:
+                - name: auditStatus
+                  in: query
+                  description: (对应场景6) 查待审核时传 0；(对应场景7) 查记录传 1 或 2，查全部传 -1
+                  schema:
+                    type: integer
+                    format: int32
+                - name: keyword
+                  in: query
+                  schema:
+                    type: string
+                - name: manualOperatorId
+                  in: query
+                  description: '--- 以下为场景7专用的历史追溯字段 ---'
+                  schema:
+                    type: string
+                - name: reviewReason
+                  in: query
+                  schema:
+                    type: string
+                - name: startTime
+                  in: query
+                  schema:
+                    type: string
+                - name: endTime
+                  in: query
+                  schema:
+                    type: string
+                - name: pageNum
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SearchCommentsReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/student/comments:
+        get:
+            tags:
+                - StudentService
+            operationId: StudentService_ListMyComments
+            parameters:
+                - name: studentId
+                  in: query
+                  schema:
+                    type: string
+                - name: pageNum
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListMyCommentsReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/student/comments/{commentId}:
+        get:
+            tags:
+                - StudentService
+            operationId: StudentService_GetCommentDetailStudent
+            parameters:
+                - name: commentId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetCommentDetailReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        delete:
+            tags:
+                - StudentService
+            operationId: StudentService_DeleteMyComment
+            parameters:
+                - name: commentId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: studentId
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DeleteMyCommentReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/student/posts/{postId}:
+        get:
+            tags:
+                - StudentService
+            operationId: StudentService_GetPostDetailStudent
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: userId
+                  in: query
+                  description: 详情页通常需要带上当前操作者ID，用于判断“我是否点赞过”、“我是否有权修改”
+                  schema:
+                    type: string
+                - name: commentPageNum
+                  in: query
+                  description: 分页参数：因为帖子下可能有成千上万条评论，详情接口通常只返回第一页评论
+                  schema:
+                    type: integer
+                    format: int32
+                - name: commentPageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetPostDetailReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/student/posts/{postId}/comments:
+        get:
+            tags:
+                - StudentService
+            operationId: StudentService_ListPostCommentsStudent
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: pageNum
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListPostCommentsReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        post:
+            tags:
+                - StudentService
+            operationId: StudentService_CreateComment
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateCommentRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CreateCommentReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/student/posts/{postId}/like:
+        post:
+            tags:
+                - StudentService
+            operationId: StudentService_LikePost
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LikePostRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LikePostReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        delete:
+            tags:
+                - StudentService
+            operationId: StudentService_UnlikePost
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: studentId
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UnlikePostReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/student/search/comments:
+        get:
+            tags:
+                - SearchService
+            description: '场景 3: 学生搜索评论 (支持全局查"背单词"，或限定在某 post_id 下查)'
+            operationId: SearchService_SearchStudentComments
+            parameters:
+                - name: keyword
+                  in: query
+                  schema:
+                    type: string
+                - name: postId
+                  in: query
+                  schema:
+                    type: string
+                - name: pageNum
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SearchCommentsReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/student/search/posts:
+        get:
+            tags:
+                - SearchService
+            description: '场景 1 & 2: 学生综合搜索知识帖 (支持关键词检索、按助教ID过滤)'
+            operationId: SearchService_SearchStudentPosts
+            parameters:
+                - name: keyword
+                  in: query
+                  schema:
+                    type: string
+                - name: tutorId
+                  in: query
+                  schema:
+                    type: string
+                - name: pageNum
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SearchPostsReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/tutor/comments/{commentId}:
+        get:
+            tags:
+                - TutorService
+            operationId: TutorService_GetCommentDetailTutor
+            parameters:
+                - name: commentId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetCommentDetailReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        delete:
+            tags:
+                - TutorService
+            operationId: TutorService_DeleteCommentTutor
+            parameters:
+                - name: commentId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: tutorId
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DeleteCommentTutorReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/tutor/comments/{commentId}/replies:
+        post:
+            tags:
+                - TutorService
+            operationId: TutorService_ReplyComment
+            parameters:
+                - name: commentId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReplyCommentRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReplyCommentReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/tutor/posts:
+        get:
+            tags:
+                - TutorService
+            operationId: TutorService_ListTutorPosts
+            parameters:
+                - name: tutorId
+                  in: query
+                  schema:
+                    type: string
+                - name: pageNum
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: status
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListTutorPostsReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        post:
+            tags:
+                - TutorService
+            operationId: TutorService_CreatePost
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreatePostRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CreatePostReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/tutor/posts/{postId}:
+        get:
+            tags:
+                - TutorService
+            operationId: TutorService_GetPostDetailTutor
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: userId
+                  in: query
+                  description: 详情页通常需要带上当前操作者ID，用于判断“我是否点赞过”、“我是否有权修改”
+                  schema:
+                    type: string
+                - name: commentPageNum
+                  in: query
+                  description: 分页参数：因为帖子下可能有成千上万条评论，详情接口通常只返回第一页评论
+                  schema:
+                    type: integer
+                    format: int32
+                - name: commentPageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetPostDetailReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        put:
+            tags:
+                - TutorService
+            operationId: TutorService_UpdatePost
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdatePostRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UpdatePostReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        delete:
+            tags:
+                - TutorService
+            operationId: TutorService_DeletePost
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: tutorId
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DeletePostReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/tutor/posts/{postId}/comments:
+        get:
+            tags:
+                - TutorService
+            operationId: TutorService_ListPostCommentsTutor
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: pageNum
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListPostCommentsReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/tutor/posts/{postId}/comments/search:
+        get:
+            tags:
+                - SearchService
+            description: '场景 5: 助教搜索某知识帖下的学生评论 (查反馈、找问题)'
+            operationId: SearchService_SearchTutorComments
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: keyword
+                  in: query
+                  schema:
+                    type: string
+                - name: pageNum
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SearchCommentsReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/tutor/replies/{commentReplyId}:
+        delete:
+            tags:
+                - TutorService
+            operationId: TutorService_DeleteReply
+            parameters:
+                - name: commentReplyId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: tutorId
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DeleteReplyReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/tutor/search/posts:
+        get:
+            tags:
+                - SearchService
+            description: '场景 4: 助教搜索自己发布的知识帖 (Token隐式获取 author_id，支持标题/内容关键词)'
+            operationId: SearchService_SearchTutorPosts
+            parameters:
+                - name: keyword
+                  in: query
+                  schema:
+                    type: string
+                - name: tutorId
+                  in: query
+                  schema:
+                    type: string
+                - name: pageNum
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SearchPostsReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+components:
+    schemas:
+        AuditCommentReply:
+            type: object
+            properties: {}
+        AuditCommentRequest:
+            type: object
+            properties:
+                operatorId:
+                    type: string
+                commentId:
+                    type: string
+                action:
+                    type: integer
+                    format: int32
+                manualReviewReason:
+                    type: string
+        CommentDTO:
+            type: object
+            properties:
+                commentId:
+                    type: string
+                postId:
+                    type: string
+                studentId:
+                    type: string
+                content:
+                    type: string
+                visibleStatus:
+                    type: integer
+                    format: int32
+                auditStatus:
+                    type: integer
+                    format: int32
+                createdAt:
+                    type: string
+                replies:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ReplyDTO'
+        CreateCommentReply:
+            type: object
+            properties:
+                commentId:
+                    type: string
+                auditStatus:
+                    type: integer
+                    format: int32
+        CreateCommentRequest:
+            type: object
+            properties:
+                studentId:
+                    type: string
+                postId:
+                    type: string
+                content:
+                    type: string
+        CreatePostReply:
+            type: object
+            properties:
+                postId:
+                    type: string
+        CreatePostRequest:
+            type: object
+            properties:
+                tutorId:
+                    type: string
+                title:
+                    type: string
+                content:
+                    type: string
+        DeleteCommentTutorReply:
+            type: object
+            properties: {}
+        DeleteMyCommentReply:
+            type: object
+            properties: {}
+        DeletePostReply:
+            type: object
+            properties: {}
+        DeleteReplyReply:
+            type: object
+            properties: {}
+        GetCommentAuditDetailReply:
+            type: object
+            properties:
+                comment:
+                    $ref: '#/components/schemas/CommentDTO'
+                post:
+                    $ref: '#/components/schemas/PostDTO'
+        GetCommentDetailReply:
+            type: object
+            properties:
+                comment:
+                    $ref: '#/components/schemas/CommentDTO'
+                postInfo:
+                    $ref: '#/components/schemas/PostDTO'
+        GetPostDetailReply:
+            type: object
+            properties:
+                post:
+                    $ref: '#/components/schemas/PostDTO'
+                comments:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CommentDTO'
+                    description: 组合数据：评论及其回复
+                totalComments:
+                    type: string
+        GoogleProtobufAny:
+            type: object
+            properties:
+                '@type':
+                    type: string
+                    description: The type of the serialized message.
+            additionalProperties: true
+            description: Contains an arbitrary serialized message along with a @type that describes the type of the serialized message.
+        LikePostReply:
+            type: object
+            properties: {}
+        LikePostRequest:
+            type: object
+            properties:
+                studentId:
+                    type: string
+                postId:
+                    type: string
+        ListMyCommentsReply:
+            type: object
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CommentDTO'
+                total:
+                    type: string
+        ListPendingCommentsReply:
+            type: object
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CommentDTO'
+                total:
+                    type: string
+        ListPostCommentsReply:
+            type: object
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CommentDTO'
+                total:
+                    type: string
+        ListTutorPostsReply:
+            type: object
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PostDTO'
+                total:
+                    type: string
+        PostDTO:
+            type: object
+            properties:
+                postId:
+                    type: string
+                authorId:
+                    type: string
+                title:
+                    type: string
+                content:
+                    type: string
+                status:
+                    type: integer
+                    format: int32
+                likeCount:
+                    type: integer
+                    format: int32
+                commentCount:
+                    type: integer
+                    format: int32
+                createdAt:
+                    type: string
+            description: |-
+                ==============================================================================
+                 公共数据结构 (Models) 保持不变
+                 ==============================================================================
+        ReplyCommentReply:
+            type: object
+            properties:
+                commentReplyId:
+                    type: string
+        ReplyCommentRequest:
+            type: object
+            properties:
+                tutorId:
+                    type: string
+                commentId:
+                    type: string
+                content:
+                    type: string
+        ReplyDTO:
+            type: object
+            properties:
+                commentReplyId:
+                    type: string
+                commentId:
+                    type: string
+                tutorId:
+                    type: string
+                content:
+                    type: string
+                createdAt:
+                    type: string
+        SearchCommentsReply:
+            type: object
+            properties:
+                total:
+                    type: string
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CommentDTO'
+            description: 评论列表通用响应
+        SearchPostsReply:
+            type: object
+            properties:
+                total:
+                    type: string
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PostDTO'
+            description: 帖子列表通用响应
+        Status:
+            type: object
+            properties:
+                code:
+                    type: integer
+                    description: The status code, which should be an enum value of [google.rpc.Code][google.rpc.Code].
+                    format: int32
+                message:
+                    type: string
+                    description: A developer-facing error message, which should be in English. Any user-facing error message should be localized and sent in the [google.rpc.Status.details][google.rpc.Status.details] field, or localized by the client.
+                details:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/GoogleProtobufAny'
+                    description: A list of messages that carry the error details.  There is a common set of message types for APIs to use.
+            description: 'The `Status` type defines a logical error model that is suitable for different programming environments, including REST APIs and RPC APIs. It is used by [gRPC](https://github.com/grpc). Each `Status` message contains three pieces of data: error code, error message, and error details. You can find out more about this error model and how to work with it in the [API Design Guide](https://cloud.google.com/apis/design/errors).'
+        UnlikePostReply:
+            type: object
+            properties: {}
+        UpdatePostReply:
+            type: object
+            properties: {}
+        UpdatePostRequest:
+            type: object
+            properties:
+                tutorId:
+                    type: string
+                postId:
+                    type: string
+                title:
+                    type: string
+                content:
+                    type: string
+tags:
+    - name: OperatorService
+      description: |-
+        ==============================================================================
+         3. 运营端服务 (Operator Service)
+         ==============================================================================
+    - name: SearchService
+      description: |-
+        =========================================================================
+         乐学空间 - 全局搜索服务 (Search Service)
+         底层全部对接 Elasticsearch，支撑 C端高频检索与 B端复杂过滤
+         =========================================================================
+    - name: StudentService
+      description: |-
+        ==============================================================================
+         2. 学生端服务 (Student Service)
+         ==============================================================================
+    - name: TutorService
+      description: |-
+        ==============================================================================
+         1. 助教端服务 (Tutor Service)
+         ==============================================================================

@@ -1,0 +1,31 @@
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Build / test output
+bin/
+*.exe
+*.exe~
+*.dll
+*.dylib
+*.test
+*.out
+*.o
+*.a
+*.so
+*.log
+
+# Local caches
+.gocache/
+
+# Local runtime config
+**/configs/config.yaml
+
+# Generated mTLS material
+certs/mtls/*.key
+certs/mtls/*.csr
+certs/mtls/*.srl
+certs/mtls/*.ext
+certs/mtls/*.crt

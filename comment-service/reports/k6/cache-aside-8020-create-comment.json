@@ -1,0 +1,209 @@
+{
+  "state": {
+    "isStdOutTTY": true,
+    "isStdErrTTY": true,
+    "testRunDurationMs": 655.876
+  },
+  "metrics": {
+    "iterations": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "rate": 1.5246784453158828,
+        "count": 1
+      }
+    },
+    "checks": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 2,
+        "fails": 0
+      },
+      "thresholds": {
+        "rate>0.95": {
+          "ok": true
+        }
+      }
+    },
+    "data_received": {
+      "contains": "data",
+      "values": {
+        "count": 272,
+        "rate": 414.7125371259201
+      },
+      "type": "counter"
+    },
+    "http_req_tls_handshaking": {
+      "contains": "time",
+      "values": {
+        "avg": 0,
+        "med": 0,
+        "p(90)": 0,
+        "p(95)": 0,
+        "p(99)": 0
+      },
+      "type": "trend"
+    },
+    "http_req_connecting": {
+      "values": {
+        "avg": 0.461,
+        "med": 0.461,
+        "p(90)": 0.461,
+        "p(95)": 0.461,
+        "p(99)": 0.461
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "http_req_waiting": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 650.494,
+        "med": 650.494,
+        "p(90)": 650.494,
+        "p(95)": 650.494,
+        "p(99)": 650.494
+      }
+    },
+    "http_req_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 651.231,
+        "med": 651.231,
+        "p(90)": 651.231,
+        "p(95)": 651.231,
+        "p(99)": 651.231
+      },
+      "thresholds": {
+        "p(95)<2000": {
+          "ok": true
+        },
+        "p(99)<4000": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_failed": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "fails": 1,
+        "rate": 0,
+        "passes": 0
+      },
+      "thresholds": {
+        "rate<0.05": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_receiving": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 0.636,
+        "med": 0.636,
+        "p(90)": 0.636,
+        "p(95)": 0.636,
+        "p(99)": 0.636
+      }
+    },
+    "http_req_duration{expected_response:true}": {
+      "contains": "time",
+      "values": {
+        "avg": 651.231,
+        "med": 651.231,
+        "p(90)": 651.231,
+        "p(95)": 651.231,
+        "p(99)": 651.231
+      },
+      "type": "trend"
+    },
+    "data_sent": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "count": 331,
+        "rate": 504.6685653995572
+      }
+    },
+    "iteration_duration": {
+      "contains": "time",
+      "values": {
+        "p(99)": 653.569625,
+        "avg": 653.569625,
+        "med": 653.569625,
+        "p(90)": 653.569625,
+        "p(95)": 653.569625
+      },
+      "type": "trend"
+    },
+    "http_req_blocked": {
+      "values": {
+        "avg": 0.995,
+        "med": 0.995,
+        "p(90)": 0.995,
+        "p(95)": 0.995,
+        "p(99)": 0.995
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "http_req_sending": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(99)": 0.101,
+        "avg": 0.101,
+        "med": 0.101,
+        "p(90)": 0.101,
+        "p(95)": 0.101
+      }
+    },
+    "http_reqs": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 1,
+        "rate": 1.5246784453158828
+      }
+    }
+  },
+  "root_group": {
+    "path": "",
+    "id": "d41d8cd98f00b204e9800998ecf8427e",
+    "groups": [],
+    "checks": [
+        {
+          "id": "7900b1724c781e002b4ea556d2517ccc",
+          "passes": 1,
+          "fails": 0,
+          "name": "status is expected",
+          "path": "::status is expected"
+        },
+        {
+          "fails": 0,
+          "name": "has trace id",
+          "path": "::has trace id",
+          "id": "2dcda26f05df7c8d30bb310115a7947b",
+          "passes": 1
+        }
+      ],
+    "name": ""
+  },
+  "options": {
+    "summaryTrendStats": [
+      "avg",
+      "med",
+      "p(90)",
+      "p(95)",
+      "p(99)"
+    ],
+    "summaryTimeUnit": "",
+    "noColor": false
+  }
+}

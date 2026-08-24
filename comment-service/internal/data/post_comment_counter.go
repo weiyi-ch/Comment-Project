@@ -1,0 +1,74 @@
+package data
+
+import (
+	"context"
+	"strconv"
+	"time"
+
+	"comment-service/dal/model"
+)
+
+const (
+	postCommentCountDeltaKey      = "counter:post_comment:delta"
+	postCommentCountDirtyKey      = "queue:post_comment:dirty"
+	postCommentCountDirtyAtKey    = "queue:post_comment:dirty_at"
+	postCommentCountDirtySinceKey = "queue:post_comment:dirty_since"
+	postCommentCountProcessingKey = "counter:post_comment:processing"
+)
+
+// enqueuePostCommentCountDelta 聚合评论新增、删除和审核驳回产生的计数变化。
+func (d *Data) enqueuePostCommentCountDelta(ctx context.Context, postID, delta int64) error {
+	if d.cache == nil || delta == 0 {
+		return nil
+	}
+
+	enqueueCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 150*time.Millisecond)
+	defer cancel()
+
+	postIDText := strconv.FormatInt(postID, 10)
+	raw, err := d.cache.Eval(enqueueCtx, enqueuePostCounterDeltaScript, []string{
+		postCommentCountDeltaKey,
+		postCommentCountDirtyKey,
+		postCommentCountDirtyAtKey,
+		postCommentCountDirtySinceKey,
+	}, postIDText, strconv.FormatInt(delta, 10), strconv.FormatInt(time.Now().UnixMilli(), 10)).Result()
+	if err != nil {
+		return err
+	}
+
+	if redisInt64(raw) == 1 && d.postLikeDirtyWriter != nil {
+		if err := d.postLikeDirtyWriter.NotifyCommentCount(ctx, postID); err != nil {
+			d.log.WithContext(ctx).Warnf("notify post comment count dirty failed, post_id=%d, err=%v", postID, err)
+		}
+	}
+	return nil
+}
+
+func (d *Data) recordPostCommentCountDelta(ctx context.Context, postID, delta int64) {
+	if err := d.enqueuePostCommentCountDelta(ctx, postID, delta); err != nil {
+		d.log.WithContext(ctx).Warnf("enqueue post comment count delta failed, post_id=%d, delta=%d, err=%v", postID, delta, err)
+		// Redis 异常时退化为同步更新，避免评论事实已写入但计数永久遗漏。
+		result := d.q.Post.WithContext(context.WithoutCancel(ctx)).UnderlyingDB().Exec(
+			"UPDATE post SET comment_count = GREATEST(comment_count + ?, 0) WHERE post_id = ?",
+			delta,
+			postID,
+		)
+		if result.Error != nil {
+			d.log.WithContext(ctx).Errorf("fallback update post comment count failed, post_id=%d, delta=%d, err=%v", postID, delta, result.Error)
+			return
+		}
+		_ = d.cache.Del(context.WithoutCancel(ctx), buildPostStatsCacheKey(postID)).Err()
+	}
+}
+
+func (d *Data) applyPendingPostCommentCountDelta(ctx context.Context, post *model.Post) {
+	if d.cache == nil || post == nil {
+		return
+	}
+	delta := d.counterDelta(ctx, postCommentCountDeltaKey, postCommentCountProcessingKey, post.PostID, "post comment")
+	value := int64(post.CommentCount) + delta
+	if value < 0 {
+		value = 0
+	}
+	post.CommentCount = int32(value)
+}

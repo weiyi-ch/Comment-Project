@@ -1,0 +1,32 @@
+server:
+  http:
+    addr: 0.0.0.0:8888
+    timeout: 3s
+  grpc:
+    addr: 0.0.0.0:9000
+    timeout: 3s
+    tls:
+      enabled: false
+      ca_file: ../certs/mtls/ca.crt
+      cert_file: ../certs/mtls/comment-service.crt
+      key_file: ../certs/mtls/comment-service.key
+      allowed_clients:
+        - student-bff
+        - tutor-bff
+        - operator-bff
+data:
+  database:
+    driver: mysql
+    source: "root:root1234@tcp(127.0.0.1:3306)/comment?parseTime=True&loc=Local"
+  redis:
+    addr: 127.0.0.1:6379
+    pass: ""
+    read_timeout: 0.2s
+    write_timeout: 0.2s
+registry:
+  consul:
+    address: 127.0.0.1:8500
+    scheme: http
+elasticsearch:
+  addresses:
+    - "http://127.0.0.1:9200"

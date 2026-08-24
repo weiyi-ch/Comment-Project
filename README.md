@@ -41,11 +41,34 @@
 - OpenTelemetry / tracing
 - k6 压测脚本
 
-### 本地依赖启动
+### 本地依赖一键启动
 
-项目根目录提供了 `docker-compose.yml`，用于启动本地中间件依赖，不再依赖远程 MySQL/Redis。
+项目根目录提供了 `docker-compose.yml`，用于启动本地中间件依赖，不再依赖远程 MySQL/Redis。所有 Docker 镜像优先使用 `docker.aityp.com` 搜索到的镜像站地址，避免直接拉取海外镜像失败。
+
+前置条件：本机已安装 Docker Desktop 或 Docker Engine，并支持 `docker compose` 命令。
+
+一键启动：
 
 ```bash
+docker compose up -d
+```
+
+查看启动状态：
+
+```bash
+docker compose ps
+```
+
+停止本地依赖：
+
+```bash
+docker compose down
+```
+
+如果需要清空本地数据并重新初始化 MySQL 表结构：
+
+```bash
+docker compose down -v
 docker compose up -d
 ```
 
@@ -62,6 +85,20 @@ docker compose up -d
 | Kibana | `http://127.0.0.1:5601` |
 
 MySQL 首次启动会执行 `comment-service/sql/comment.sql` 初始化表结构。如果已经存在旧 volume，需要先确认是否要保留数据。
+
+当前 `docker-compose.yml` 使用的镜像如下：
+
+| 组件 | 原镜像 | docker.aityp 镜像站地址 |
+| --- | --- | --- |
+| MySQL | `docker.io/mysql:8.4.0` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mysql:8.4.0` |
+| Redis Stack / RedisBloom | `docker.io/redis/redis-stack-server:7.4.0-v5` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis/redis-stack-server:7.4.0-v5` |
+| Consul | `docker.io/hashicorp/consul:1.20.1` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/hashicorp/consul:1.20.1` |
+| Kafka | `docker.io/bitnami/kafka:3.7` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/bitnami/kafka:3.7` |
+| Kafka UI | `ghcr.io/kafbat/kafka-ui:v1.4.2` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/ghcr.io/kafbat/kafka-ui:v1.4.2` |
+| Elasticsearch | `docker.elastic.co/elasticsearch/elasticsearch:8.15.1` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.elastic.co/elasticsearch/elasticsearch:8.15.1` |
+| Kibana | `docker.elastic.co/kibana/kibana:8.15.1` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.elastic.co/kibana/kibana:8.15.1` |
+
+说明：Redis 使用 `7.4.0-v5`，Elasticsearch/Kibana 使用 `8.15.1`，是因为这些版本在 `docker.aityp.com` 可直接搜索到对应镜像站地址。Elasticsearch 与 Kibana 保持同一小版本，减少本地兼容性问题。
 
 ### 已完成工作
 
@@ -168,11 +205,34 @@ This project is designed as more than a CRUD demo. It focuses on backend mechani
 - OpenTelemetry / tracing
 - k6 load testing scripts
 
-### Local Dependencies
+### One-Command Local Dependency Startup
 
-The repository root provides `docker-compose.yml` for local middleware dependencies, so the project no longer depends on remote MySQL/Redis instances.
+The repository root provides `docker-compose.yml` for local middleware dependencies, so the project no longer depends on remote MySQL/Redis instances. All Docker images prefer mirror addresses found through `docker.aityp.com`, which makes local startup less dependent on direct access to overseas registries.
+
+Prerequisite: Docker Desktop or Docker Engine is installed and the `docker compose` command is available.
+
+Start everything with one command:
 
 ```bash
+docker compose up -d
+```
+
+Check container status:
+
+```bash
+docker compose ps
+```
+
+Stop local dependencies:
+
+```bash
+docker compose down
+```
+
+Reset local data and reinitialize MySQL tables:
+
+```bash
+docker compose down -v
 docker compose up -d
 ```
 
@@ -189,6 +249,20 @@ Local component endpoints:
 | Kibana | `http://127.0.0.1:5601` |
 
 MySQL runs `comment-service/sql/comment.sql` on first startup to initialize tables. If an old volume already exists, decide whether to keep or recreate the data first.
+
+Images used by the current `docker-compose.yml`:
+
+| Component | Source image | docker.aityp mirror image |
+| --- | --- | --- |
+| MySQL | `docker.io/mysql:8.4.0` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mysql:8.4.0` |
+| Redis Stack / RedisBloom | `docker.io/redis/redis-stack-server:7.4.0-v5` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis/redis-stack-server:7.4.0-v5` |
+| Consul | `docker.io/hashicorp/consul:1.20.1` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/hashicorp/consul:1.20.1` |
+| Kafka | `docker.io/bitnami/kafka:3.7` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/bitnami/kafka:3.7` |
+| Kafka UI | `ghcr.io/kafbat/kafka-ui:v1.4.2` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/ghcr.io/kafbat/kafka-ui:v1.4.2` |
+| Elasticsearch | `docker.elastic.co/elasticsearch/elasticsearch:8.15.1` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.elastic.co/elasticsearch/elasticsearch:8.15.1` |
+| Kibana | `docker.elastic.co/kibana/kibana:8.15.1` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.elastic.co/kibana/kibana:8.15.1` |
+
+Note: Redis uses `7.4.0-v5`, and Elasticsearch/Kibana use `8.15.1`, because these versions have directly searchable mirror addresses on `docker.aityp.com`. Elasticsearch and Kibana keep the same minor version to reduce local compatibility issues.
 
 ### Completed Work
 

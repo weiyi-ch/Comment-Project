@@ -2,7 +2,8 @@ name: comment-project
 
 services:
   mysql:
-    image: mysql:8.4
+    # docker.aityp.com mirror of docker.io/mysql:8.4.0
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mysql:8.4.0
     container_name: comment-mysql
     restart: unless-stopped
     environment:
@@ -25,7 +26,8 @@ services:
       retries: 10
 
   redis:
-    image: redis/redis-stack-server:7.4.0-v7
+    # docker.aityp.com mirror of docker.io/redis/redis-stack-server:7.4.0-v5
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis/redis-stack-server:7.4.0-v5
     container_name: comment-redis
     restart: unless-stopped
     environment:
@@ -41,7 +43,8 @@ services:
       retries: 10
 
   consul:
-    image: hashicorp/consul:1.20
+    # docker.aityp.com mirror of docker.io/hashicorp/consul:1.20.1
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/hashicorp/consul:1.20.1
     container_name: comment-consul
     restart: unless-stopped
     command: ["agent", "-dev", "-client=0.0.0.0", "-ui"]
@@ -55,7 +58,8 @@ services:
       retries: 10
 
   kafka:
-    image: bitnami/kafka:3.7
+    # docker.aityp.com mirror of docker.io/bitnami/kafka:3.7
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/bitnami/kafka:3.7
     container_name: comment-kafka
     restart: unless-stopped
     environment:
@@ -98,7 +102,8 @@ services:
       - "8090:8080"
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    # docker.aityp.com mirror of docker.elastic.co/elasticsearch/elasticsearch:8.15.1
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.elastic.co/elasticsearch/elasticsearch:8.15.1
     container_name: comment-elasticsearch
     restart: unless-stopped
     environment:
@@ -118,7 +123,8 @@ services:
       retries: 20
 
   kibana:
-    image: docker.elastic.co/kibana/kibana:8.15.3
+    # docker.aityp.com mirror of docker.elastic.co/kibana/kibana:8.15.1
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.elastic.co/kibana/kibana:8.15.1
     container_name: comment-kibana
     restart: unless-stopped
     depends_on:

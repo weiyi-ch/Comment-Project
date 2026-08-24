@@ -5,8 +5,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +38,7 @@ const (
 	postCounterBatchRetryDelay         = 30 * time.Second
 	postCounterBatchScanInterval       = 3 * time.Second
 	postCounterBatchScanSize           = 100
+	postCounterBatchRecoveryScanSize   = 100
 	postCounterReconcileInterval       = 10 * time.Minute
 	postCounterReconcileBatchSize      = 200
 	postStatsCachePrefix               = "mysql:post:stats:"
@@ -242,6 +245,11 @@ func (js *JobWorker) startPostCounterScheduler(ctx context.Context, kind postCou
 					js.log.Warnf("fallback schedule %s dirty counters failed: %v", kind.name, err)
 				}
 			case <-batchTicker.C:
+				if restored, cleaned, err := js.recoverProcessingCounterBatches(ctx, kind, postCounterBatchRecoveryScanSize); err != nil && ctx.Err() == nil {
+					js.log.Warnf("recover %s processing counter batches failed: %v", kind.name, err)
+				} else if restored > 0 || cleaned > 0 {
+					js.log.Debugf("recover %s processing counter batches success, restored=%d, cleaned=%d", kind.name, restored, cleaned)
+				}
 				if applied, err := js.applyDueCounterBatches(ctx, kind, postCounterBatchScanSize); err != nil && ctx.Err() == nil {
 					js.log.Warnf("apply %s counter batches failed: %v", kind.name, err)
 				} else if applied > 0 {
@@ -493,6 +501,104 @@ type counterBatchRow struct {
 	BatchID string
 	PostID  int64
 	Delta   int64
+}
+
+type counterBatchStateRow struct {
+	Status string
+	PostID int64
+	Delta  int64
+}
+
+// recoverProcessingCounterBatches 修复 Redis processing 与 MySQL counter_batch 之间的非事务窗口。
+//
+// pending -> processing 是 Redis Lua 原子完成的，但随后写 MySQL batch 不是同一个事务。
+// 如果进程在这段窗口失败，processing_batch 中还有 batch_id，MySQL 却没有 counter_batch。
+// 这个恢复任务会用同一个 batch_id 重新插入 counter_batch，保证后续 applyCounterBatch 仍然幂等。
+func (js *JobWorker) recoverProcessingCounterBatches(ctx context.Context, kind postCounterKind, batchSize int64) (int, int, error) {
+	if js == nil || js.data == nil || js.data.DB() == nil || js.data.Redis() == nil {
+		return 0, 0, nil
+	}
+	if batchSize <= 0 {
+		batchSize = postCounterBatchRecoveryScanSize
+	}
+	if err := ensureCounterStorage(js.data.DB()); err != nil {
+		return 0, 0, err
+	}
+
+	batchIDs, err := js.data.Redis().SRandMemberN(ctx, kind.processingBatchesKey, batchSize).Result()
+	if err != nil && err != redis.Nil {
+		return 0, 0, err
+	}
+
+	restored, cleaned := 0, 0
+	for _, batchID := range batchIDs {
+		if strings.TrimSpace(batchID) == "" {
+			continue
+		}
+		ok, wasRestored, wasCleaned, err := js.recoverProcessingCounterBatch(ctx, kind, batchID)
+		if err != nil {
+			return restored, cleaned, err
+		}
+		if !ok {
+			continue
+		}
+		if wasRestored {
+			restored++
+		}
+		if wasCleaned {
+			cleaned++
+		}
+	}
+	return restored, cleaned, nil
+}
+
+func (js *JobWorker) recoverProcessingCounterBatch(ctx context.Context, kind postCounterKind, batchID string) (bool, bool, bool, error) {
+	raw, err := js.data.Redis().HGet(ctx, kind.processingBatchKey, batchID).Result()
+	if err == redis.Nil {
+		_ = js.data.Redis().SRem(ctx, kind.processingBatchesKey, batchID).Err()
+		return false, false, false, nil
+	}
+	if err != nil {
+		return false, false, false, err
+	}
+
+	postID, delta, err := parseProcessingCounterBatchValue(raw)
+	if err != nil {
+		return false, false, false, err
+	}
+
+	var state counterBatchStateRow
+	err = js.data.DB().WithContext(ctx).
+		Table("counter_batch").
+		Select("status, post_id, delta").
+		Where("batch_id = ? AND counter_type = ?", batchID, kind.name).
+		Take(&state).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		if err := js.insertCounterBatch(ctx, kind, postID, delta, batchID); err != nil {
+			return false, false, false, err
+		}
+		return true, true, false, nil
+	}
+	if err != nil {
+		return false, false, false, err
+	}
+
+	if state.Status == "success" {
+		clearedPostID, err := js.clearProcessingPostCounterBatch(ctx, kind, batchID)
+		if err != nil {
+			return false, false, false, err
+		}
+		if clearedPostID > 0 {
+			_ = js.data.Redis().Del(ctx, buildPostStatsCacheKey(clearedPostID)).Err()
+		}
+		return true, false, true, nil
+	}
+
+	if state.PostID != postID || state.Delta != delta {
+		js.log.Warnf("processing %s counter batch differs from db, batch_id=%s, redis_post_id=%d, redis_delta=%d, db_post_id=%d, db_delta=%d",
+			kind.name, batchID, postID, delta, state.PostID, state.Delta)
+	}
+	return true, false, false, nil
 }
 
 func (js *JobWorker) applyDueCounterBatches(ctx context.Context, kind postCounterKind, batchSize int) (int, error) {
@@ -776,6 +882,22 @@ func redisCounterValue(value interface{}) int64 {
 		n, _ := strconv.ParseInt(fmt.Sprint(v), 10, 64)
 		return n
 	}
+}
+
+func parseProcessingCounterBatchValue(raw string) (int64, int64, error) {
+	postIDText, deltaText, ok := strings.Cut(raw, ":")
+	if !ok {
+		return 0, 0, fmt.Errorf("invalid processing counter batch value=%q", raw)
+	}
+	postID, err := strconv.ParseInt(postIDText, 10, 64)
+	if err != nil || postID <= 0 {
+		return 0, 0, fmt.Errorf("invalid processing counter batch post_id=%q", postIDText)
+	}
+	delta, err := strconv.ParseInt(deltaText, 10, 64)
+	if err != nil || delta == 0 {
+		return 0, 0, fmt.Errorf("invalid processing counter batch delta=%q", deltaText)
+	}
+	return postID, delta, nil
 }
 
 func (js *JobWorker) clearProcessingPostCounterBatch(ctx context.Context, kind postCounterKind, batchID string) (int64, error) {

@@ -9,6 +9,7 @@ import (
 	"comment-tutor/internal/service"
 
 	consul "github.com/go-kratos/kratos/contrib/registry/consul/v2"
+	kerrors "github.com/go-kratos/kratos/v2/errors"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/middleware/recovery"
 	"github.com/go-kratos/kratos/v2/middleware/tracing"
@@ -92,10 +93,17 @@ func tutorAuthFilter(authSvc *auth.Service) http.FilterFunc {
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			p, err := authSvc.ParsePrincipal(r)
 			if err != nil {
-				stdhttp.Error(w, err.Error(), stdhttp.StatusUnauthorized)
+				stdhttp.Error(w, err.Error(), authErrorStatus(err))
 				return
 			}
 			next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), p)))
 		})
 	}
+}
+
+func authErrorStatus(err error) int {
+	if kerrors.IsForbidden(err) {
+		return stdhttp.StatusForbidden
+	}
+	return stdhttp.StatusUnauthorized
 }

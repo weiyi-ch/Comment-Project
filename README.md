@@ -1,19 +1,19 @@
 # Comment-Project
 
-一个基于 Go Kratos 的学习社区评论系统复盘项目，用于沉淀评论、点赞、审核、搜索、缓存、异步计数和微服务调用链路等后端设计能力。
+一个基于 Go Kratos 的学习社区评论系统复盘项目，用于沉淀评论、点赞、审核、搜索、缓存、异步计数、BFF 鉴权和微服务调用链路等后端设计能力。
 
-项目背景来自某在线教育/学习社区业务场景，具体公司与业务名称已做泛化处理。系统面向学生、助教、运营三类角色：学生可以浏览知识帖、发表评论、点赞和搜索；助教可以发布帖子、回复评论和管理自己帖子下的互动；运营可以审核评论、处理违规内容并查询审核列表。
+项目背景来自某在线教育/学习社区业务场景，具体公司与业务名称已做泛化处理。系统面向学生、助教、运营三类角色：学生浏览知识帖、发表评论、点赞和搜索；助教发布帖子、回复评论并管理自己帖子下的互动；运营审核评论、处理违规内容并查询审核列表。
 
 ## 中文说明
 
 ### 项目目标
 
-这个项目不是只做 CRUD，而是围绕评论系统中最容易被面试追问的几个问题做工程化实现：
+这个项目不是只做 CRUD，而是围绕评论系统中面试最容易被追问的工程问题做实现：
 
 - 高并发读：帖子详情、评论列表、搜索结果如何减少 MySQL 回源。
 - 热点写：点赞数、评论数如何避免频繁更新同一行造成锁竞争。
 - 数据一致性：评论审核、删除、点赞关系、异步计数和 ES 同步如何保证最终正确。
-- 权限边界：BFF 做身份认证，核心服务做资源级权限校验。
+- 权限边界：BFF 做登录态校验，核心服务做资源级权限校验。
 - 可恢复性：Kafka、Redis、ES、MySQL 或后台任务异常时如何重试、补偿和对账。
 
 ### 系统模块
@@ -22,9 +22,9 @@
 | --- | --- |
 | `comment-service` | 评论领域核心服务，负责帖子、评论、回复、点赞、审核、搜索等主要业务逻辑 |
 | `comment-task` | 异步任务服务，负责消费 Kafka、同步 ES、异步刷点赞/评论计数、处理 retry/DLQ |
-| `comment-student` | 学生端 HTTP BFF，负责学生端入口鉴权、参数组装，并通过 gRPC 调用 `comment-service` |
-| `comment-tutor` | 助教端 HTTP BFF，负责助教端帖子、评论、回复和搜索入口 |
-| `comment-operator` | 运营端 HTTP BFF，负责审核列表、审核动作、运营检索和运营视角详情入口 |
+| `comment-student` | 学生端 HTTP BFF，负责学生端注册登录、鉴权、参数组装，并通过 gRPC 调用 `comment-service` |
+| `comment-tutor` | 助教端 HTTP BFF，负责助教端注册登录、鉴权、帖子、评论、回复和搜索入口 |
+| `comment-operator` | 运营端 HTTP BFF，负责运营端注册登录、鉴权、审核列表、审核动作和运营检索入口 |
 | `docs` | 项目设计、链路分析、压测记录、后续实现清单 |
 | `scripts` | 辅助脚本，例如 mTLS 证书生成 |
 
@@ -44,34 +44,27 @@
 ### 已完成工作
 
 - 已初始化 Git 仓库并推送到 GitHub：`https://github.com/weiyi-ch/Comment-Project.git`
-- 已新增实现路线文档：`docs/implementation-roadmap.md`
-- 已配置 GitHub 仓库描述、topics、基础规则集和合并后自动删除分支。
+- 已配置 GitHub 仓库描述、topics、分支 ruleset 和合并后自动删除分支。
 - 已补充根目录 `LICENSE`、贡献说明、安全说明、PR 模板和 Issue 模板。
+- 已新增实现路线文档：`docs/implementation-roadmap.md`
+- 已拆分三端 BFF：`comment-student`、`comment-tutor`、`comment-operator`。
 - 已定义学生端、助教端、运营端和搜索相关 proto 接口。
 - 已实现学生端帖子详情、评论列表、发表评论、删除评论、点赞、取消点赞、我的评论、搜索等入口。
 - 已实现助教端发帖、更新帖子、删除帖子、评论列表、评论详情、删除评论、回复评论、删除回复等领域逻辑。
 - 已实现运营端待审核列表、审核详情、评论审核、运营视角详情查询等领域逻辑。
-- 帖子详情已做 Core/Stats 拆分缓存。
-- 评论列表已采用“列表 ID 缓存 + 评论对象缓存”的两级缓存结构。
+- 帖子详情已做 Core/Stats 拆分缓存，评论列表已采用“列表 ID 缓存 + 评论对象缓存”的两级缓存结构。
 - 读路径使用 Cache-Aside、singleflight、Redis MGET、MySQL IN 查询减少重复回源。
 - 已引入 RedisBloom，用于按 ID 查询时拦截明显不存在的帖子和评论。
 - 点赞关系事实数据同步写入 MySQL，保证用户是否点赞的正确性。
 - 点赞数和评论数通过 Redis delta 聚合，再由 `comment-task` 异步批量落库。
 - MySQL 作为事实源，Elasticsearch 作为搜索读模型，`comment-task` 负责 Canal/Kafka 到 ES 的同步、重试和 DLQ。
-- `comment-student`、`comment-tutor`、`comment-operator` 已拆分为三端 BFF。
+- 三端 BFF 已新增注册、登录、刷新 token 和登出接口，密码使用 bcrypt 哈希保存，不再保存明文密码。
+- access token 使用短有效期签名 token，携带 `user_id`、`role`、`token_id`。
+- refresh token 使用服务端存储的哈希值，支持轮换、撤销和登出。
+- 三端 `internal/auth` 已不再信任 `x-user-id`，只从 Bearer access token 解析可信身份。
+- BFF 调用 `comment-service` 时会通过 gRPC metadata 传递可信 `user_id`、`role`、`token_id`，`comment-service` 会写入请求 context。
 
 ### 待办清单
-
-#### P0：用户注册登录与 Token 体系
-
-- [ ] 增加用户数据模型，支持学生、助教、运营三类角色。
-- [ ] 增加注册接口，保存密码哈希，禁止明文密码。
-- [ ] 增加登录接口，签发 access token 和 refresh token。
-- [ ] 实现 access token 短有效期校验，携带 user_id、role、token_id。
-- [ ] 实现 refresh token 服务端存储、轮换、撤销和登出。
-- [ ] 改造三端 `internal/auth`，不再信任 `x-user-id`。
-- [x] 增加助教端和运营端 BFF 基础鉴权。
-- [ ] 将可信身份通过 gRPC metadata/context 传递到 `comment-service`。
 
 #### P0：令牌桶与多维限流
 
@@ -86,7 +79,7 @@
 
 #### P1：补齐复习笔记中描述但还需增强的能力
 
-- [ ] 继续完善 `comment-tutor` 和 `comment-operator` 的真实登录态、限流和审计能力。
+- [ ] 继续完善 `comment-tutor` 和 `comment-operator` 的审计能力。
 - [ ] 增加敏感词或机器审核模块。
 - [ ] 增加审核记录/操作审计表。
 - [ ] 增加 ES mapping 初始化脚本和全量重建脚本。
@@ -97,7 +90,7 @@
 
 #### P2：工程质量
 
-- [ ] 增加 token、refresh token、登出、撤销相关单元测试。
+- [x] 增加 token、refresh token、登出、撤销相关单元测试。
 - [ ] 增加令牌桶、多维限流、Redis Lua 的单元测试。
 - [ ] 增加审核状态流转、点赞幂等、异步计数恢复测试。
 - [ ] 增加 BFF 到 `comment-service` 的 metadata 传递集成测试。
@@ -105,10 +98,9 @@
 
 ### 后续实现顺序
 
-1. 先做真实登录注册和 token 体系，因为后续权限、限流、审计都依赖可信 `user_id/role`。
-2. 再做令牌桶和多维限流，用登录、点赞、评论、搜索四类接口验证不同维度的限流效果。
-3. 然后补齐三端 BFF、自动审核、审计日志、ES 重建/对账、Bloom 预热等复习笔记中的完整设计。
-4. 最后完善测试、压测和 README 启动文档，让项目既能运行，也能解释清楚每个机制为什么存在。
+1. 先做令牌桶和多维限流，用登录、点赞、评论、搜索四类接口验证不同维度的限流效果。
+2. 然后补齐自动审核、审计日志、ES 重建/对账、Bloom 预热等复习笔记中的完整设计。
+3. 最后完善测试、压测和 README 启动文档，让项目既能运行，也能解释清楚每个机制为什么存在。
 
 更详细的实现路线见：[docs/implementation-roadmap.md](docs/implementation-roadmap.md)。
 
@@ -118,14 +110,14 @@
 
 Comment-Project is a Go Kratos based backend review project for a learning community comment system. The original business context has been anonymized. The system serves three roles: students, tutors, and operators. Students read posts, create comments, like content, and search; tutors publish posts, reply to comments, and manage interactions under their own posts; operators review comments, handle violations, and query moderation records.
 
-### Goals
+### Design Goals
 
-This project is designed as more than a CRUD demo. It focuses on backend mechanisms that are easy to discuss in interviews:
+This project is designed as more than a CRUD demo. It focuses on backend mechanisms that are commonly discussed in interviews:
 
 - High-concurrency reads: reduce repeated MySQL reads for post detail pages, comment lists, and search results.
 - Hotspot writes: avoid frequently updating the same counter rows for likes and comments.
-- Data consistency: keep moderation, deletion, like relationships, async counters, and Elasticsearch synchronization eventually correct.
-- Authorization boundary: BFF services verify user identity, while the core service keeps resource-level authorization.
+- Data consistency: keep comment moderation, deletion, like relationships, asynchronous counters, and Elasticsearch synchronization eventually correct.
+- Authorization boundary: BFF services verify user identity, while the core comment service keeps resource-level authorization.
 - Recoverability: handle retries, compensation, reconciliation, and DLQ workflows when Kafka, Redis, Elasticsearch, MySQL, or background workers fail.
 
 ### Modules
@@ -134,10 +126,10 @@ This project is designed as more than a CRUD demo. It focuses on backend mechani
 | --- | --- |
 | `comment-service` | Core comment-domain service for posts, comments, replies, likes, moderation, and search |
 | `comment-task` | Background task service for Kafka consumption, Elasticsearch sync, async counter flushing, retry, and DLQ |
-| `comment-student` | Student HTTP BFF for student entry authentication, request assembly, and gRPC calls to `comment-service` |
-| `comment-tutor` | Tutor HTTP BFF for tutor-side post, comment, reply, and search entry points |
-| `comment-operator` | Operator HTTP BFF for moderation lists, moderation actions, operator search, and operator-view details |
-| `docs` | Design notes, workflow analysis, load testing notes, and implementation roadmap |
+| `comment-student` | Student HTTP BFF for registration, login, authorization, request assembly, and gRPC calls to `comment-service` |
+| `comment-tutor` | Tutor HTTP BFF for registration, login, authorization, post/comment/reply/search entry points |
+| `comment-operator` | Operator HTTP BFF for registration, login, authorization, moderation lists, moderation actions, and operator search |
+| `docs` | Design notes, workflow analysis, load test notes, and implementation roadmap |
 | `scripts` | Helper scripts such as mTLS certificate generation |
 
 ### Tech Stack
@@ -156,34 +148,27 @@ This project is designed as more than a CRUD demo. It focuses on backend mechani
 ### Completed Work
 
 - Initialized the Git repository and pushed it to GitHub: `https://github.com/weiyi-ch/Comment-Project.git`
-- Added the implementation roadmap: `docs/implementation-roadmap.md`
-- Completed GitHub repository metadata, topics, branch ruleset, and automatic branch deletion after merge.
+- Completed GitHub repository description, topics, branch ruleset, and automatic branch deletion after merge.
 - Added root `LICENSE`, contribution guide, security policy, pull request template, and issue templates.
+- Added the implementation roadmap: `docs/implementation-roadmap.md`
+- Split the role-specific BFF services into `comment-student`, `comment-tutor`, and `comment-operator`.
 - Defined proto APIs for student, tutor, operator, and search workflows.
 - Implemented student-side entry points for post detail, comment list, comment creation/deletion, like/unlike, personal comments, and search.
 - Implemented tutor-side domain logic for creating, updating, deleting posts, listing comments, viewing comment detail, deleting comments, replying, and deleting replies.
 - Implemented operator-side domain logic for pending moderation lists, moderation detail, comment review, and operator-view detail queries.
-- Added Core/Stats split caching for post details.
-- Added two-level list/object caching for comment lists.
+- Added Core/Stats split caching for post details and two-level list/object caching for comment lists.
 - Added Cache-Aside, singleflight, Redis MGET, and MySQL IN query patterns to reduce duplicate database fallback.
 - Added RedisBloom to reject clearly nonexistent post/comment IDs before database access.
 - Stored like relationship facts in MySQL to keep user-like state correct.
 - Aggregated like/comment counter deltas in Redis and flush them asynchronously through `comment-task`.
 - Used MySQL as the source of truth and Elasticsearch as the search read model, with Canal/Kafka synchronization, retry, and DLQ handling.
-- Split the role-specific BFF services into `comment-student`, `comment-tutor`, and `comment-operator`.
+- Added registration, login, token refresh, and logout endpoints for all three BFF services. Passwords are stored with bcrypt hashes and never stored as plaintext.
+- Added short-lived signed access tokens containing `user_id`, `role`, and `token_id`.
+- Added server-side refresh token storage by token hash, with refresh token rotation, revocation, and logout support.
+- Updated all three `internal/auth` packages so they no longer trust `x-user-id`; identity is parsed only from Bearer access tokens.
+- Forwarded trusted `user_id`, `role`, and `token_id` from BFF services to `comment-service` through gRPC metadata and stored it in the service request context.
 
 ### TODO
-
-#### P0: User Registration, Login, and Token System
-
-- [ ] Add a user data model that supports student, tutor, and operator roles.
-- [ ] Add registration APIs and store password hashes instead of plaintext passwords.
-- [ ] Add login APIs that issue access tokens and refresh tokens.
-- [ ] Validate short-lived access tokens carrying `user_id`, `role`, and `token_id`.
-- [ ] Store refresh tokens on the server side and support rotation, revocation, and logout.
-- [ ] Update all three `internal/auth` packages so they no longer trust `x-user-id`.
-- [x] Add basic authentication for tutor and operator BFF services.
-- [ ] Pass trusted identity to `comment-service` through gRPC metadata/context.
 
 #### P0: Token Bucket and Multi-Dimensional Rate Limiting
 
@@ -198,7 +183,7 @@ This project is designed as more than a CRUD demo. It focuses on backend mechani
 
 #### P1: Remaining Features From Review Notes
 
-- [ ] Continue improving real login state, rate limiting, and audit capabilities in `comment-tutor` and `comment-operator`.
+- [ ] Continue improving audit capabilities in `comment-tutor` and `comment-operator`.
 - [ ] Add sensitive-word or machine-review modules.
 - [ ] Add moderation operation records and audit tables.
 - [ ] Add Elasticsearch mapping initialization and full-rebuild scripts.
@@ -209,7 +194,7 @@ This project is designed as more than a CRUD demo. It focuses on backend mechani
 
 #### P2: Engineering Quality
 
-- [ ] Add unit tests for access tokens, refresh tokens, logout, and revocation.
+- [x] Add unit tests for access tokens, refresh tokens, logout, and revocation.
 - [ ] Add unit tests for token bucket, multi-dimensional rate limiting, and Redis Lua scripts.
 - [ ] Add tests for moderation state transitions, like idempotency, and async counter recovery.
 - [ ] Add integration tests for BFF-to-`comment-service` metadata propagation.
@@ -217,9 +202,8 @@ This project is designed as more than a CRUD demo. It focuses on backend mechani
 
 ### Suggested Implementation Order
 
-1. Implement real registration/login and token management first because authorization, rate limiting, and audit logs all depend on trusted `user_id/role`.
-2. Implement token bucket and multi-dimensional rate limiting, then validate it through login, like, comment, and search APIs.
-3. Complete the BFF, auto-review, audit log, Elasticsearch rebuild/reconciliation, and RedisBloom warm-up workflows from the review notes.
-4. Improve tests, load testing scripts, and README startup documentation so the project can both run and be explained clearly in interviews.
+1. Implement token bucket and multi-dimensional rate limiting, then validate it through login, like, comment, and search APIs.
+2. Complete auto-review, audit logs, Elasticsearch rebuild/reconciliation, and RedisBloom warm-up workflows from the review notes.
+3. Improve tests, load testing scripts, and README startup documentation so the project can both run and be explained clearly in interviews.
 
 See the detailed roadmap: [docs/implementation-roadmap.md](docs/implementation-roadmap.md).

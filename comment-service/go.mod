@@ -6,9 +6,9 @@ require (
 	github.com/Q1mi/canal-go v0.1.0
 	github.com/elastic/go-elasticsearch/v8 v8.19.5
 	github.com/envoyproxy/protoc-gen-validate v1.0.4
-	github.com/go-sql-driver/mysql v1.9.3
 	github.com/go-kratos/kratos/contrib/registry/consul/v2 v2.0.0-20260404020628-f149714c1d54
 	github.com/go-kratos/kratos/v2 v2.9.2
+	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/wire v0.6.0
 	github.com/hashicorp/consul/api v1.34.1
 	github.com/redis/go-redis/v9 v9.19.0

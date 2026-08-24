@@ -1,0 +1,24 @@
+server:
+  http:
+    addr: 0.0.0.0:8083
+    timeout: 3s
+registry:
+  consul:
+    address: 127.0.0.1:8500
+    scheme: http
+client:
+  comment_service:
+    service_name: comment-service
+    timeout: 2s
+    tls:
+      enabled: false
+      ca_file: ../certs/mtls/ca.crt
+      cert_file: ../certs/mtls/comment-operator.crt
+      key_file: ../certs/mtls/comment-operator.key
+      server_name: comment-service
+auth:
+  role: operator
+  signing_secret: comment-operator-dev-secret
+  store_file: data/comment-operator-auth.json
+  access_token_ttl: 15m
+  refresh_token_ttl: 168h

@@ -8,10 +8,11 @@ import (
 )
 
 type Bootstrap struct {
-	Server   Server   `yaml:"server"`
-	Registry Registry `yaml:"registry"`
-	Client   Client   `yaml:"client"`
-	Auth     Auth     `yaml:"auth"`
+	Server    Server    `yaml:"server"`
+	Registry  Registry  `yaml:"registry"`
+	Client    Client    `yaml:"client"`
+	Auth      Auth      `yaml:"auth"`
+	RateLimit RateLimit `yaml:"rate_limit"`
 }
 
 type Server struct {
@@ -56,6 +57,29 @@ type Auth struct {
 	SigningSecret string `yaml:"signing_secret"`
 }
 
+type RateLimit struct {
+	Enabled bool          `yaml:"enabled"`
+	Redis   Redis         `yaml:"redis"`
+	User    RateLimitRule `yaml:"user"`
+	IP      RateLimitRule `yaml:"ip"`
+	Device  RateLimitRule `yaml:"device"`
+	API     RateLimitRule `yaml:"api"`
+}
+
+type Redis struct {
+	Addr         string        `yaml:"addr"`
+	Password     string        `yaml:"password"`
+	DB           int           `yaml:"db"`
+	DialTimeout  time.Duration `yaml:"dial_timeout"`
+	ReadTimeout  time.Duration `yaml:"read_timeout"`
+	WriteTimeout time.Duration `yaml:"write_timeout"`
+}
+
+type RateLimitRule struct {
+	Rate     float64 `yaml:"rate"`
+	Capacity float64 `yaml:"capacity"`
+}
+
 func Load(path string) (*Bootstrap, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -96,5 +120,30 @@ func (c *Bootstrap) applyDefaults() {
 	}
 	if c.Auth.SigningSecret == "" {
 		c.Auth.SigningSecret = "comment-student-dev-secret"
+	}
+	if c.RateLimit.Redis.Addr == "" {
+		c.RateLimit.Redis.Addr = "127.0.0.1:6379"
+	}
+	if c.RateLimit.Redis.DialTimeout <= 0 {
+		c.RateLimit.Redis.DialTimeout = time.Second
+	}
+	if c.RateLimit.Redis.ReadTimeout <= 0 {
+		c.RateLimit.Redis.ReadTimeout = time.Second
+	}
+	if c.RateLimit.Redis.WriteTimeout <= 0 {
+		c.RateLimit.Redis.WriteTimeout = time.Second
+	}
+	applyRateLimitRuleDefault(&c.RateLimit.User, 2, 5)
+	applyRateLimitRuleDefault(&c.RateLimit.IP, 20, 50)
+	applyRateLimitRuleDefault(&c.RateLimit.Device, 3, 10)
+	applyRateLimitRuleDefault(&c.RateLimit.API, 1000, 2000)
+}
+
+func applyRateLimitRuleDefault(rule *RateLimitRule, rate, capacity float64) {
+	if rule.Rate <= 0 {
+		rule.Rate = rate
+	}
+	if rule.Capacity <= 0 {
+		rule.Capacity = capacity
 	}
 }

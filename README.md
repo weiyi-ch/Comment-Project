@@ -123,15 +123,18 @@ MySQL 首次启动会执行 `comment-service/sql/comment.sql` 初始化表结构
 - refresh token 使用服务端存储的哈希值，支持轮换、撤销和登出。
 - 三端 `internal/auth` 已不再信任 `x-user-id`，只从 Bearer access token 解析可信身份。
 - BFF 调用 `comment-service` 时会通过 gRPC metadata 传递可信 `user_id`、`role`、`token_id`，`comment-service` 会写入请求 context。
+- 学生端已实现 Redis + Lua 多维令牌桶限流，支持 user、IP、device、API 四类维度一次性原子检查与扣减。
 
 ### 待办清单
 
 #### P0：令牌桶与多维限流
 
-- [ ] 增加基础令牌桶限流中间件。
-- [ ] 先实现单机内存令牌桶，验证 refill 和扣减逻辑。
-- [ ] 再实现 Redis + Lua 分布式令牌桶，保证多实例下扣减原子性。
-- [ ] 支持全局、IP、用户、接口、post_id 等多维限流。
+- [x] 学生端增加基础令牌桶限流中间件。
+- [x] 学生端实现 Redis + Lua 分布式令牌桶，保证多实例下扣减原子性。
+- [x] 学生端支持用户、IP、设备、接口四类维度限流。
+- [ ] 将多维令牌桶限流扩展到助教端和运营端。
+- [ ] 视业务风险增加 `post_id`、评论 ID、搜索关键词等资源维度限流。
+- [ ] 先实现单机内存令牌桶，作为 Redis 不可用时的本地降级策略。
 - [ ] 登录接口增加 IP + 账号维度限流，防止爆破。
 - [ ] 点赞和评论接口增加 user_id + post_id 维度限流，保护热点帖子。
 - [ ] 搜索接口增加 user_id/IP + keyword 维度限流，保护 ES。
@@ -287,15 +290,18 @@ Note: Redis uses `7.4.0-v5`, and Elasticsearch/Kibana use `8.15.1`, because thes
 - Added server-side refresh token storage by token hash, with refresh token rotation, revocation, and logout support.
 - Updated all three `internal/auth` packages so they no longer trust `x-user-id`; identity is parsed only from Bearer access tokens.
 - Forwarded trusted `user_id`, `role`, and `token_id` from BFF services to `comment-service` through gRPC metadata and stored it in the service request context.
+- Implemented Redis + Lua multi-dimensional token bucket rate limiting in the student BFF, with atomic check-and-consume across user, IP, device, and API dimensions.
 
 ### TODO
 
 #### P0: Token Bucket and Multi-Dimensional Rate Limiting
 
-- [ ] Add a basic token bucket rate-limiting middleware.
-- [ ] Implement an in-memory token bucket first to validate refill and token consumption behavior.
-- [ ] Implement a Redis + Lua distributed token bucket so multi-instance token consumption is atomic.
-- [ ] Support global, IP, user, API, and `post_id` dimensions.
+- [x] Add a basic token bucket rate-limiting middleware to the student BFF.
+- [x] Implement a Redis + Lua distributed token bucket in the student BFF so multi-instance token consumption is atomic.
+- [x] Support user, IP, device, and API rate-limiting dimensions in the student BFF.
+- [ ] Extend the multi-dimensional token bucket limiter to tutor and operator BFF services.
+- [ ] Add resource-level dimensions such as `post_id`, comment ID, and search keyword where business risk requires them.
+- [ ] Implement an in-memory token bucket as a local fallback strategy when Redis is unavailable.
 - [ ] Add IP + account rate limiting for login to reduce brute-force risk.
 - [ ] Add user + `post_id` rate limiting for like/comment APIs to protect hot posts.
 - [ ] Add user/IP + keyword rate limiting for search APIs to protect Elasticsearch.

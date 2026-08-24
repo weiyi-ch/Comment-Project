@@ -6,6 +6,7 @@ import (
 	"comment-student/internal/auth"
 	"comment-student/internal/client"
 	"comment-student/internal/conf"
+	"comment-student/internal/ratelimit"
 	"comment-student/internal/service"
 
 	consul "github.com/go-kratos/kratos/contrib/registry/consul/v2"
@@ -39,7 +40,7 @@ func NewDiscovery(reg *consul.Registry) registry.Discovery {
 	return reg
 }
 
-func NewHTTPServer(cfg conf.HTTP, authCfg conf.Auth, comment *client.CommentClient, student *service.StudentCommentService, logger log.Logger) *http.Server {
+func NewHTTPServer(cfg conf.HTTP, authCfg conf.Auth, comment *client.CommentClient, student *service.StudentCommentService, limiter *ratelimit.Limiter, logger log.Logger) *http.Server {
 	authSvc, err := auth.NewService(auth.Config{
 		Role:          authCfg.Role,
 		SigningSecret: authCfg.SigningSecret,
@@ -64,13 +65,13 @@ func NewHTTPServer(cfg conf.HTTP, authCfg conf.Auth, comment *client.CommentClie
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	authRouter := srv.Route("/api/student/auth")
+	authRouter := srv.Route("/api/student/auth", limiter.AuthFilter())
 	authRouter.POST("/register", authHTTP.Register)
 	authRouter.POST("/login", authHTTP.Login)
 	authRouter.POST("/refresh", authHTTP.Refresh)
 	authRouter.POST("/logout", authHTTP.Logout)
 
-	router := srv.Route("/api/student", studentAuthFilter(authSvc))
+	router := srv.Route("/api/student", studentAuthFilter(authSvc, limiter))
 	router.GET("/posts/{post_id}", student.GetPostDetail)
 	router.GET("/posts/{post_id}/comments", student.ListPostComments)
 	router.POST("/posts/{post_id}/comments", student.CreateComment)
@@ -85,7 +86,7 @@ func NewHTTPServer(cfg conf.HTTP, authCfg conf.Auth, comment *client.CommentClie
 	return srv
 }
 
-func studentAuthFilter(authSvc *auth.Service) http.FilterFunc {
+func studentAuthFilter(authSvc *auth.Service, limiter *ratelimit.Limiter) http.FilterFunc {
 	return func(next stdhttp.Handler) stdhttp.Handler {
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			p, err := authSvc.ParsePrincipal(r)
@@ -93,7 +94,8 @@ func studentAuthFilter(authSvc *auth.Service) http.FilterFunc {
 				stdhttp.Error(w, err.Error(), stdhttp.StatusUnauthorized)
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), p)))
+			r = r.WithContext(auth.WithPrincipal(r.Context(), p))
+			limiter.StudentFilter()(next).ServeHTTP(w, r)
 		})
 	}
 }

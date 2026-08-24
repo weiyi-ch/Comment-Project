@@ -9,6 +9,7 @@ package main
 import (
 	"comment-student/internal/client"
 	"comment-student/internal/conf"
+	"comment-student/internal/ratelimit"
 	"comment-student/internal/server"
 	"comment-student/internal/service"
 	"github.com/go-kratos/kratos/v2"
@@ -21,7 +22,7 @@ import (
 
 // Injectors from wire.go:
 
-func wireApp(confHTTP conf.HTTP, confAuth conf.Auth, confRegistry conf.Registry, confComment conf.CommentService, logger log.Logger) (*kratos.App, func(), error) {
+func wireApp(confHTTP conf.HTTP, confAuth conf.Auth, confRateLimit conf.RateLimit, confRegistry conf.Registry, confComment conf.CommentService, logger log.Logger) (*kratos.App, func(), error) {
 	registry := server.NewConsulRegistry(confRegistry)
 	registrar := server.NewRegistrar(registry)
 	discovery := server.NewDiscovery(registry)
@@ -29,10 +30,16 @@ func wireApp(confHTTP conf.HTTP, confAuth conf.Auth, confRegistry conf.Registry,
 	if err != nil {
 		return nil, nil, err
 	}
+	limiter, cleanup2, err := ratelimit.NewLimiter(confRateLimit, logger)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
 	studentCommentService := service.NewStudentCommentService(commentClient, logger)
-	httpServer := server.NewHTTPServer(confHTTP, confAuth, commentClient, studentCommentService, logger)
+	httpServer := server.NewHTTPServer(confHTTP, confAuth, commentClient, studentCommentService, limiter, logger)
 	app := newApp(logger, registrar, httpServer)
 	return app, func() {
+		cleanup2()
 		cleanup()
 	}, nil
 }

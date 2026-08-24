@@ -6,6 +6,7 @@ package main
 import (
 	"comment-student/internal/client"
 	"comment-student/internal/conf"
+	"comment-student/internal/ratelimit"
 	"comment-student/internal/server"
 	"comment-student/internal/service"
 
@@ -14,6 +15,6 @@ import (
 	"github.com/google/wire"
 )
 
-func wireApp(confHTTP conf.HTTP, confAuth conf.Auth, confRegistry conf.Registry, confComment conf.CommentService, logger log.Logger) (*kratos.App, func(), error) {
-	panic(wire.Build(server.ProviderSet, client.ProviderSet, service.ProviderSet, newApp))
+func wireApp(confHTTP conf.HTTP, confAuth conf.Auth, confRateLimit conf.RateLimit, confRegistry conf.Registry, confComment conf.CommentService, logger log.Logger) (*kratos.App, func(), error) {
+	panic(wire.Build(server.ProviderSet, client.ProviderSet, service.ProviderSet, ratelimit.NewLimiter, newApp))
 }

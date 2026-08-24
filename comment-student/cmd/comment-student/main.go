@@ -55,7 +55,7 @@ func main() {
 		panic(err)
 	}
 
-	app, cleanup, err := wireApp(cfg.Server.HTTP, cfg.Auth, cfg.Registry, cfg.Client.CommentService, logger)
+	app, cleanup, err := wireApp(cfg.Server.HTTP, cfg.Auth, cfg.RateLimit, cfg.Registry, cfg.Client.CommentService, logger)
 	if err != nil {
 		panic(err)
 	}

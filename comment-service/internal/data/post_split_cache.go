@@ -214,6 +214,28 @@ func writePostStatsCache(ctx context.Context, cache *redis.Client, key string, s
 	_ = cache.Set(ctx, key, data, cacheTTLWithJitter(ttl)).Err()
 }
 
+func writePostCoreCaches(ctx context.Context, cache *redis.Client, posts []*model.Post, ttl time.Duration) {
+	if cache == nil || len(posts) == 0 || cachecontrol.Bypass(ctx) {
+		return
+	}
+
+	pipe := cache.TxPipeline()
+	for _, post := range posts {
+		if post == nil || post.PostID <= 0 {
+			continue
+		}
+		core := *post
+		core.LikeCount = 0
+		core.CommentCount = 0
+		data, err := json.Marshal(&core)
+		if err != nil {
+			continue
+		}
+		pipe.Set(ctx, buildPostCoreCacheKey(post.PostID), data, cacheTTLWithJitter(ttl))
+	}
+	_, _ = pipe.Exec(ctx)
+}
+
 func writePostNullCache(ctx context.Context, cache *redis.Client, key, nullValue string, ttl time.Duration) {
 	if cache == nil || cachecontrol.Bypass(ctx) {
 		return

@@ -60,6 +60,7 @@ const (
 	tutorListCacheTTL   = 2 * time.Minute
 	tutorNullCacheTTL   = 30 * time.Second
 
+	tutorPostListCacheVersion    = 2
 	tutorCommentListCacheVersion = 2
 
 	tutorNullCacheValue = "__nil__"
@@ -233,19 +234,20 @@ func (r *tutorRepo) GetPostByID(ctx context.Context, postID int64) (*model.Post,
 // ListTutorPosts 查询助教发布的知识帖列表。
 //
 // 查询链路：
-// Redis 列表缓存
+// Redis 列表 ID 缓存
 //
 //	↓
 //
-// singleflight
+// Redis MGET 帖子 core 对象缓存
 //
 //	↓
 //
-// MySQL 分页查询。
+// singleflight + MySQL 分页查询或按 ID 批量补 miss。
 //
 // 注意：
 // 1. 列表缓存不使用 Bloom Filter；
-// 2. 列表受新增、删除、修改影响较多，使用短 TTL 自动过期。
+// 2. 列表只保存 post_id 和 total，帖子内容变更只需要删除 core 缓存；
+// 3. 列表受新增、删除影响较多，使用短 TTL 自动过期。
 func (r *tutorRepo) ListTutorPosts(ctx context.Context, tutorID int64, pageNum, pageSize int32) ([]*model.Post, int64, error) {
 	// 分页参数先统一修正，保证 Redis key 和 MySQL 查询使用同一套分页语义。
 	pageNum, pageSize = normalizeTutorPage(pageNum, pageSize)
@@ -253,12 +255,13 @@ func (r *tutorRepo) ListTutorPosts(ctx context.Context, tutorID int64, pageNum, 
 	// 助教帖子列表 key 由 tutor_id + page 参数 hash 得到，对应一个固定分页窗口。
 	key := buildTutorPostListCacheKey(tutorID, pageNum, pageSize)
 
-	// 先读列表缓存。该缓存保存当前页帖子对象和 total，命中时可以完全跳过 MySQL。
+	// 先读列表缓存。该缓存只保存当前页 post_id 顺序和 total，命中后再批量加载帖子对象。
 	cache, hit, err := r.getPostListFromCache(ctx, key)
 	if err != nil {
 		r.log.WithContext(ctx).Warnf("get tutor post list cache failed, key=%s, err=%v", key, err)
 	} else if hit {
-		return cache.Items, cache.Total, nil
+		posts, err := r.loadPostsByIDs(ctx, cache.PostIDs)
+		return posts, cache.Total, err
 	}
 
 	// 未命中时用 singleflight 防止同一分页列表被并发回源。
@@ -275,11 +278,9 @@ func (r *tutorRepo) ListTutorPosts(ctx context.Context, tutorID int64, pageNum, 
 			return nil, err
 		}
 
-		// 重建短 TTL 列表缓存。帖子新增、删除、修改不精准维护该缓存，主要依赖 TTL 自动过期。
-		cache = &postListCache{
-			Items: posts,
-			Total: total,
-		}
+		// 列表缓存只写 post_id 顺序和 total；完整帖子对象交给 core/stats 缓存复用。
+		writePostCoreCaches(ctx, r.data.cache, posts, tutorObjectCacheTTL)
+		cache = newTutorPostListCache(posts, total)
 
 		data, err := json.Marshal(cache)
 		if err == nil {
@@ -298,7 +299,8 @@ func (r *tutorRepo) ListTutorPosts(ctx context.Context, tutorID int64, pageNum, 
 		return nil, 0, fmt.Errorf("invalid tutor post list cache result")
 	}
 
-	return cache.Items, cache.Total, nil
+	posts, err := r.loadPostsByIDs(ctx, cache.PostIDs)
+	return posts, cache.Total, err
 }
 
 // ============================================================
@@ -742,6 +744,20 @@ func (r *tutorRepo) queryTutorPostsFromDB(ctx context.Context, tutorID int64, pa
 	return posts, total, nil
 }
 
+// queryVisiblePostsByIDsFromDB 批量查询仍然发布且未删除的帖子。
+//
+// 入参通常来自帖子列表 ID 缓存；返回值会在 loadPostsByIDs 中按原 ID 顺序重新组装。
+func (r *tutorRepo) queryVisiblePostsByIDsFromDB(ctx context.Context, postIDs []int64) ([]*model.Post, error) {
+	if len(postIDs) == 0 {
+		return []*model.Post{}, nil
+	}
+
+	p := r.data.q.Post
+	return p.WithContext(ctx).
+		Where(p.PostID.In(postIDs...), p.Status.Eq(1), p.DeletedAt.IsNull()).
+		Find()
+}
+
 // queryCommentByIDFromDB 从 MySQL 查询单条未删除评论。
 //
 // 助教端需要用该方法做评论详情、删除权限校验、回复前校验等强一致读取。
@@ -830,10 +846,12 @@ func embeddedReplyFromComment(comment *model.StudyComment) *model.StudyCommentRe
 
 // postListCache 是助教帖子列表缓存 value。
 //
-// 助教帖子列表直接缓存当前页帖子对象和 total，因为列表只面向助教自己的帖子视图。
+// 列表只保存 post_id 顺序和 total；完整帖子对象走 mysql:post:core:{post_id}
+// 与 mysql:post:stats:{post_id}，这样单个帖子编辑时不用清理所有列表页缓存。
 type postListCache struct {
-	Items []*model.Post `json:"items"`
-	Total int64         `json:"total"`
+	Version int     `json:"version"`
+	PostIDs []int64 `json:"post_ids"`
+	Total   int64   `json:"total"`
 }
 
 // commentListCache 是助教端帖子评论列表缓存 value。
@@ -843,6 +861,25 @@ type commentListCache struct {
 	Version    int     `json:"version"`
 	CommentIDs []int64 `json:"comment_ids"`
 	Total      int64   `json:"total"`
+}
+
+func newTutorPostListCache(posts []*model.Post, total int64) *postListCache {
+	return &postListCache{
+		Version: tutorPostListCacheVersion,
+		PostIDs: collectTutorPostIDs(posts),
+		Total:   total,
+	}
+}
+
+func collectTutorPostIDs(posts []*model.Post) []int64 {
+	ids := make([]int64, 0, len(posts))
+	for _, post := range posts {
+		if post == nil || post.PostID <= 0 {
+			continue
+		}
+		ids = append(ids, post.PostID)
+	}
+	return ids
 }
 
 // newTutorCommentListCache 把评论对象列表转换成轻量列表缓存。
@@ -1091,13 +1128,116 @@ func (r *tutorRepo) setCommentObjectCaches(ctx context.Context, comments []*mode
 	}
 }
 
+// loadPostsByIDs 按 post_id 顺序批量加载帖子对象。
+//
+// 列表缓存只保存 ID，这里先 MGET core 对象缓存；miss 的帖子再用 MySQL IN 批量回源，
+// 最后统一挂载 post_counter 与 Redis 未落库 delta。
+func (r *tutorRepo) loadPostsByIDs(ctx context.Context, postIDs []int64) ([]*model.Post, error) {
+	if len(postIDs) == 0 {
+		return []*model.Post{}, nil
+	}
+
+	cached, missed, err := r.getPostsFromCoreCache(ctx, postIDs)
+	if err != nil {
+		r.log.WithContext(ctx).Warnf("mget tutor post core cache failed, err=%v", err)
+		missed = postIDs
+	}
+
+	if len(missed) > 0 {
+		posts, err := r.queryVisiblePostsByIDsFromDB(ctx, missed)
+		if err != nil {
+			return nil, err
+		}
+		writePostCoreCaches(ctx, r.data.cache, posts, tutorObjectCacheTTL)
+		for _, post := range posts {
+			if post == nil {
+				continue
+			}
+			cached[post.PostID] = post
+		}
+	}
+
+	result := make([]*model.Post, 0, len(postIDs))
+	for _, postID := range postIDs {
+		if post := cached[postID]; post != nil {
+			result = append(result, post)
+		}
+	}
+	if err := r.data.attachPostCounters(ctx, result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (r *tutorRepo) getPostsFromCoreCache(ctx context.Context, postIDs []int64) (map[int64]*model.Post, []int64, error) {
+	result := make(map[int64]*model.Post, len(postIDs))
+	missed := make([]int64, 0, len(postIDs))
+	if len(postIDs) == 0 {
+		return result, missed, nil
+	}
+	if r.data.cache == nil || cachecontrol.Bypass(ctx) {
+		return result, postIDs, nil
+	}
+
+	keys := make([]string, 0, len(postIDs))
+	for _, postID := range postIDs {
+		keys = append(keys, buildPostCoreCacheKey(postID))
+	}
+
+	cacheCtx, cacheSpan := observability.StartSpan(ctx, "redis.MGET mysql:post:core",
+		attribute.String("db.system", "redis"),
+		attribute.String("db.operation", "MGET"),
+		attribute.String("app.role", "tutor"),
+		attribute.String("cache.key.prefix", postCoreCachePrefix),
+		attribute.Int("cache.keys.count", len(keys)),
+	)
+	values, err := r.data.cache.MGet(cacheCtx, keys...).Result()
+	if err != nil {
+		observability.EndSpan(cacheSpan, err)
+		return result, postIDs, err
+	}
+
+	for i, value := range values {
+		postID := postIDs[i]
+		if value == nil {
+			missed = append(missed, postID)
+			continue
+		}
+		raw, ok := redisValueBytes(value)
+		if !ok || string(raw) == tutorNullCacheValue {
+			missed = append(missed, postID)
+			continue
+		}
+
+		var post model.Post
+		if err := json.Unmarshal(raw, &post); err != nil {
+			_ = r.delCache(ctx, keys[i])
+			missed = append(missed, postID)
+			continue
+		}
+		if post.PostID <= 0 {
+			_ = r.delCache(ctx, keys[i])
+			missed = append(missed, postID)
+			continue
+		}
+		result[post.PostID] = &post
+	}
+
+	cacheSpan.SetAttributes(
+		attribute.Int("cache.hit.count", len(result)),
+		attribute.Int("cache.miss.count", len(missed)),
+	)
+	observability.EndSpan(cacheSpan, nil)
+	return result, missed, nil
+}
+
 // ============================================================
 // 十一、列表缓存读取方法
 // ============================================================
 
-// getPostListFromCache 读取助教帖子分页列表缓存。
+// getPostListFromCache 读取助教帖子分页列表 ID 缓存。
 //
-// 返回 postListCache，其中 Items 是当前页帖子对象列表，Total 是总数。
+// 返回 postListCache，其中 PostIDs 是当前页帖子 ID 顺序，Total 是总数。
 func (r *tutorRepo) getPostListFromCache(ctx context.Context, key string) (*postListCache, bool, error) {
 	data, err := r.getCache(ctx, key)
 	if err != nil {
@@ -1111,6 +1251,13 @@ func (r *tutorRepo) getPostListFromCache(ctx context.Context, key string) (*post
 	if err := json.Unmarshal(data, &cache); err != nil {
 		_ = r.delCache(ctx, key)
 		return nil, false, err
+	}
+	if cache.Version != tutorPostListCacheVersion {
+		_ = r.delCache(ctx, key)
+		return nil, false, nil
+	}
+	if cache.PostIDs == nil {
+		cache.PostIDs = []int64{}
 	}
 
 	return &cache, true, nil

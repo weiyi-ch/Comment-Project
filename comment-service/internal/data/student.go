@@ -653,7 +653,7 @@ func (r *studentRepo) ListPostCommentsStudent(ctx context.Context, postID int64,
 			attribute.Int("comments.count", len(comments)),
 			attribute.Int64("total_comments", cache.Total),
 		)
-		return comments, total, nil
+		return comments, cache.Total, nil
 	}
 
 	// 缓存未命中时进入 singleflight，防止同一个分页 key 在高并发下同时打到 MySQL。
@@ -723,8 +723,8 @@ func (r *studentRepo) ListPostCommentsStudent(ctx context.Context, postID int64,
 		attribute.Int("comments.count", len(comments)),
 		attribute.Int64("total_comments", cache.Total),
 	)
-	// 返回当前页学生可见评论列表，以及满足条件的评论总数 total。
-	return comments, total, nil
+	// 返回当前页学生可见评论列表，以及列表缓存中保存的 total。
+	return comments, cache.Total, nil
 }
 
 // ListMyComments 查询学生自己的评论列表。

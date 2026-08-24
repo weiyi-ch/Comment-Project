@@ -63,8 +63,8 @@ else
 fi
 
 generate_leaf "comment-service" "comment-service"
-generate_leaf "student-bff" "student-bff"
-generate_leaf "tutor-bff" "tutor-bff"
-generate_leaf "operator-bff" "operator-bff"
+generate_leaf "comment-student" "comment-student"
+generate_leaf "comment-tutor" "comment-tutor"
+generate_leaf "comment-operator" "comment-operator"
 
 echo "mTLS certificates are ready in $OUT_DIR"

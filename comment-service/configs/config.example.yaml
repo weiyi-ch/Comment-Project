@@ -11,9 +11,9 @@ server:
       cert_file: ../certs/mtls/comment-service.crt
       key_file: ../certs/mtls/comment-service.key
       allowed_clients:
-        - student-bff
-        - tutor-bff
-        - operator-bff
+        - comment-student
+        - comment-tutor
+        - comment-operator
 data:
   database:
     driver: mysql

@@ -20,7 +20,9 @@
 | --- | --- |
 | `comment-service` | 评论领域核心服务，负责帖子、评论、回复、点赞、审核、搜索等主要业务逻辑 |
 | `comment-task` | 异步任务服务，负责消费 Kafka、同步 ES、异步刷点赞/评论计数、处理 retry/DLQ |
-| `student-bff` | 学生端 HTTP BFF，负责学生端入口鉴权、参数组装，并通过 gRPC 调用 `comment-service` |
+| `comment-student` | 学生端 HTTP BFF，负责学生端入口鉴权、参数组装，并通过 gRPC 调用 `comment-service` |
+| `comment-tutor` | 助教端 HTTP BFF，负责助教端帖子、评论、回复和搜索入口 |
+| `comment-operator` | 运营端 HTTP BFF，负责审核列表、审核动作、运营检索和运营视角详情入口 |
 | `docs` | 项目设计、链路分析、压测记录、后续实现清单 |
 | `scripts` | 辅助脚本，例如 mTLS 证书生成 |
 
@@ -78,8 +80,10 @@
 
 ### BFF 与鉴权边界
 
-- `student-bff` 已有基础 HTTP 接入层和学生身份解析。
-- 当前身份解析仍是简化实现，支持 `x-user-id` 或 `Bearer student:{id}`，还不是真实 token 体系。
+- `comment-student` 已有基础 HTTP 接入层和学生身份解析。
+- `comment-tutor` 已新增助教端 HTTP 接入层和助教身份解析。
+- `comment-operator` 已新增运营端 HTTP 接入层和运营身份解析。
+- 当前身份解析仍是简化实现，支持 `x-user-id` 或 `Bearer student:{id}`、`Bearer tutor:{id}`、`Bearer operator:{id}`，还不是真实 token 体系。
 - 核心服务侧已保留部分资源级权限校验，例如学生只能删除自己的评论，助教只能操作自己帖子下的内容，运营审核需要满足状态流转。
 
 ## 待办清单
@@ -91,8 +95,8 @@
 - [ ] 增加登录接口，签发 access token 和 refresh token。
 - [ ] 实现 access token 短有效期校验，携带 user_id、role、token_id。
 - [ ] 实现 refresh token 服务端存储、轮换、撤销和登出。
-- [ ] 改造 `student-bff/internal/auth`，不再信任 `x-user-id`。
-- [ ] 增加助教端和运营端 BFF 鉴权。
+- [ ] 改造三端 `internal/auth`，不再信任 `x-user-id`。
+- [x] 增加助教端和运营端 BFF 基础鉴权。
 - [ ] 将可信身份通过 gRPC metadata/context 传递到 `comment-service`。
 
 ### P0：令牌桶与多维限流
@@ -108,7 +112,8 @@
 
 ### P1：补齐复习笔记中描述但还需增强的能力
 
-- [ ] 完整补齐 `tutor-bff` 和 `operator-bff`。
+- [x] 新增 `comment-tutor` 和 `comment-operator` 基础微服务。
+- [ ] 继续完善 `comment-tutor` 和 `comment-operator` 的真实登录态、限流和审计能力。
 - [ ] 增加敏感词或机器审核模块。
 - [ ] 增加审核记录/操作审计表。
 - [ ] 增加 ES mapping 初始化脚本和全量重建脚本。

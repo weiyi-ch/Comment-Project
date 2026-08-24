@@ -1,0 +1,477 @@
+syntax = "proto3";
+
+//生成server端： kratos proto server api/comment/v1/comment.proto -t internal/service
+//生成client端： kratos proto client api/review/v1/review.proto
+
+
+package api.comment.v1;
+
+import "google/api/annotations.proto";
+import "validate/validate.proto";
+option go_package = "comment-tutor/api/comment/v1;v1";
+option java_multiple_files = true;
+option java_package = "api.comment.v1";
+
+// ==============================================================================
+// 1. 助教端服务 (Tutor Service)
+// ==============================================================================
+service TutorService {
+  rpc GetPostDetailTutor(GetPostDetailRequest) returns (GetPostDetailReply) {
+    option (google.api.http) = {
+      get: "/v1/tutor/posts/{post_id}"
+    };
+  }
+  rpc CreatePost(CreatePostRequest) returns (CreatePostReply) {
+    option (google.api.http) = {
+      post: "/v1/tutor/posts"
+      body: "*"
+    };
+  }
+  rpc UpdatePost(UpdatePostRequest) returns (UpdatePostReply) {
+    option (google.api.http) = {
+      put: "/v1/tutor/posts/{post_id}"
+      body: "*"
+    };
+  }
+  rpc DeletePost(DeletePostRequest) returns (DeletePostReply) {
+    option (google.api.http) = {
+      delete: "/v1/tutor/posts/{post_id}"
+    };
+  }
+  rpc ListTutorPosts(ListTutorPostsRequest) returns (ListTutorPostsReply) {
+    option (google.api.http) = {
+      get: "/v1/tutor/posts"
+    };
+  }
+  rpc ListPostCommentsTutor(ListPostCommentsRequest) returns (ListPostCommentsReply) {
+    option (google.api.http) = {
+      get: "/v1/tutor/posts/{post_id}/comments"
+    };
+  }
+  rpc GetCommentDetailTutor(GetCommentDetailRequest) returns (GetCommentDetailReply) {
+    option (google.api.http) = {
+      get: "/v1/tutor/comments/{comment_id}"
+    };
+  }
+  rpc DeleteCommentTutor(DeleteCommentTutorRequest) returns (DeleteCommentTutorReply) {
+    option (google.api.http) = {
+      delete: "/v1/tutor/comments/{comment_id}"
+    };
+  }
+  rpc ReplyComment(ReplyCommentRequest) returns (ReplyCommentReply) {
+    option (google.api.http) = {
+      post: "/v1/tutor/comments/{comment_id}/replies"
+      body: "*"
+    };
+  }
+  rpc DeleteReply(DeleteReplyRequest) returns (DeleteReplyReply) {
+    option (google.api.http) = {
+      delete: "/v1/tutor/replies/{comment_reply_id}"
+    };
+  }
+}
+
+// ==============================================================================
+// 2. 学生端服务 (Student Service)
+// ==============================================================================
+service StudentService {
+  rpc GetPostDetailStudent(GetPostDetailRequest) returns (GetPostDetailReply) {
+    option (google.api.http) = {
+      get: "/v1/student/posts/{post_id}"
+    };
+  }
+  rpc LikePost(LikePostRequest) returns (LikePostReply) {
+    option (google.api.http) = {
+      post: "/v1/student/posts/{post_id}/like"
+      body: "*"
+    };
+  }
+  rpc UnlikePost(UnlikePostRequest) returns (UnlikePostReply) {
+    option (google.api.http) = {
+      delete: "/v1/student/posts/{post_id}/like"
+    };
+  }
+  rpc CreateComment(CreateCommentRequest) returns (CreateCommentReply) {
+    option (google.api.http) = {
+      post: "/v1/student/posts/{post_id}/comments"
+      body: "*"
+    };
+  }
+  rpc DeleteMyComment(DeleteMyCommentRequest) returns (DeleteMyCommentReply) {
+    option (google.api.http) = {
+      delete: "/v1/student/comments/{comment_id}"
+    };
+  }
+  rpc ListPostCommentsStudent(ListPostCommentsRequest) returns (ListPostCommentsReply) {
+    option (google.api.http) = {
+      get: "/v1/student/posts/{post_id}/comments"
+    };
+  }
+  rpc GetCommentDetailStudent(GetCommentDetailRequest) returns (GetCommentDetailReply) {
+    option (google.api.http) = {
+      get: "/v1/student/comments/{comment_id}"
+    };
+  }
+  rpc ListMyComments(ListMyCommentsRequest) returns (ListMyCommentsReply) {
+    option (google.api.http) = {
+      get: "/v1/student/comments"
+    };
+  }
+}
+
+// ==============================================================================
+// 3. 运营端服务 (Operator Service)
+// ==============================================================================
+service OperatorService {
+  rpc GetPostDetailOperator(GetPostDetailRequest) returns (GetPostDetailReply) {
+    option (google.api.http) = {
+      get: "/v1/operator/posts/{post_id}"
+    };
+  }
+  rpc ListPendingComments(ListPendingCommentsRequest) returns (ListPendingCommentsReply) {
+    option (google.api.http) = {
+      get: "/v1/operator/comments/pending"
+    };
+  }
+  rpc GetCommentAuditDetail(GetCommentAuditDetailRequest) returns (GetCommentAuditDetailReply) {
+    option (google.api.http) = {
+      get: "/v1/operator/comments/{comment_id}/audit"
+    };
+  }
+  rpc AuditComment(AuditCommentRequest) returns (AuditCommentReply) {
+    option (google.api.http) = {
+      post: "/v1/operator/comments/{comment_id}/audit"
+      body: "*"
+    };
+  }
+}
+
+// ==============================================================================
+// 公共数据结构 (Models) 保持不变
+// ==============================================================================
+message PostDTO {
+  int64 post_id = 1;
+  int64 author_id = 2;
+  string title = 3;
+  string content = 4;
+  int32 status = 5;
+  int32 like_count = 6;
+  int32 comment_count = 7;
+  int64 created_at = 8;
+}
+
+message CommentDTO {
+  int64 comment_id = 1;
+  int64 post_id = 2;
+  int64 student_id = 3;
+  string content = 4;
+  int32 visible_status = 5;
+  int32 audit_status = 6;
+  int64 created_at = 7;
+  repeated ReplyDTO replies = 8;
+}
+
+message ReplyDTO {
+  int64 comment_reply_id = 1;
+  int64 comment_id = 2;
+  int64 tutor_id = 3;
+  string content = 4;
+  int64 created_at = 5;
+}
+
+// ==============================================================================
+// 助教端 Request / Reply
+// ==============================================================================
+
+message CreatePostRequest {
+  int64 tutor_id = 1 [(validate.rules).int64 = {gt: 0}];
+  string title = 2 [(validate.rules).string = {min_len: 1, max_len: 200}];
+  string content = 3 [(validate.rules).string = {min_len: 1}];
+}
+message CreatePostReply {
+  int64 post_id = 1;
+}
+
+message UpdatePostRequest {
+  int64 tutor_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 post_id = 2 [(validate.rules).int64 = {gt: 0}];
+  string title = 3 [(validate.rules).string = {min_len: 1, max_len: 200}];
+  string content = 4 [(validate.rules).string = {min_len: 1}];
+}
+message UpdatePostReply {}
+
+message DeletePostRequest {
+  int64 tutor_id = 1 [(validate.rules).int64 = {gt: 0}]; // HTTP GET/DELETE 时会映射为 URL query: ?tutor_id=xx
+  int64 post_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+message DeletePostReply {}
+
+message ListTutorPostsRequest {
+  int64 tutor_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int32 page_num = 2 [(validate.rules).int32 = {gt: 0}];
+  int32 page_size = 3 [(validate.rules).int32 = {gt: 0, lte: 100}]; // 限制单页最大条数防雪崩
+  int32 status = 4; // 可选过滤条件，0表示不限
+}
+message ListTutorPostsReply {
+  repeated PostDTO items = 1;
+  int64 total = 2;
+}
+
+message DeleteCommentTutorRequest {
+  int64 tutor_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 comment_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+message DeleteCommentTutorReply {}
+
+message ReplyCommentRequest {
+  int64 tutor_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 comment_id = 2 [(validate.rules).int64 = {gt: 0}];
+  string content = 3 [(validate.rules).string = {min_len: 1, max_len: 1000}];
+}
+message ReplyCommentReply {
+  int64 comment_reply_id = 1;
+}
+
+message DeleteReplyRequest {
+  int64 tutor_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 comment_reply_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+message DeleteReplyReply {}
+
+// ==============================================================================
+// 学生端 Request / Reply
+// ==============================================================================
+
+message LikePostRequest {
+  int64 student_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 post_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+message LikePostReply {}
+
+message UnlikePostRequest {
+  int64 student_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 post_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+message UnlikePostReply {}
+
+message CreateCommentRequest {
+  int64 student_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 post_id = 2 [(validate.rules).int64 = {gt: 0}];
+  string content = 3 [(validate.rules).string = {min_len: 1, max_len: 1000}];
+}
+message CreateCommentReply {
+  int64 comment_id = 1;
+  int32 audit_status = 2;
+}
+
+message DeleteMyCommentRequest {
+  int64 student_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 comment_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+message DeleteMyCommentReply {}
+
+message ListMyCommentsRequest {
+  int64 student_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int32 page_num = 2 [(validate.rules).int32 = {gt: 0}];
+  int32 page_size = 3 [(validate.rules).int32 = {gt: 0, lte: 100}];
+}
+message ListMyCommentsReply {
+  repeated CommentDTO items = 1;
+  int64 total = 2;
+}
+
+// ==============================================================================
+// 公共 (学生/助教/运营复用) Request / Reply
+// ==============================================================================
+
+message ListPostCommentsRequest {
+  int64 post_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int32 page_num = 2 [(validate.rules).int32 = {gt: 0}];
+  int32 page_size = 3 [(validate.rules).int32 = {gt: 0, lte: 100}];
+}
+message ListPostCommentsReply {
+  repeated CommentDTO items = 1;
+  int64 total = 2;
+}
+
+message GetCommentDetailRequest {
+  int64 comment_id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+message GetCommentDetailReply {
+  CommentDTO comment = 1;
+  PostDTO post_info = 2;
+}
+// ==============================================================================
+// 帖子详情公共 Request / Reply
+// ==============================================================================
+
+message GetPostDetailRequest {
+  int64 post_id = 1 [(validate.rules).int64 = {gt: 0}];
+
+  // 详情页通常需要带上当前操作者ID，用于判断“我是否点赞过”、“我是否有权修改”
+  int64 user_id = 2;
+
+  // 分页参数：因为帖子下可能有成千上万条评论，详情接口通常只返回第一页评论
+  int32 comment_page_num = 3;
+  int32 comment_page_size = 4;
+}
+
+message GetPostDetailReply {
+  PostDTO post = 1;              // 帖子基本信息
+
+  // 组合数据：评论及其回复
+  repeated CommentDTO comments = 2;
+  int64 total_comments = 3;      // 总评论数
+
+}
+// ==============================================================================
+// 运营端 Request / Reply
+// ==============================================================================
+
+message ListPendingCommentsRequest {
+  int64 operator_id = 1 [(validate.rules).int64 = {gt: 0}]; // 记录谁在操作或查看
+  int32 page_num = 2 [(validate.rules).int32 = {gt: 0}];
+  int32 page_size = 3 [(validate.rules).int32 = {gt: 0, lte: 100}];
+  int32 audit_status = 4 [(validate.rules).int32 = {in: [0, 1, 2]}]; // 0待审核 1通过 2驳回
+}
+message ListPendingCommentsReply {
+  repeated CommentDTO items = 1;
+  int64 total = 2;
+}
+
+message GetCommentAuditDetailRequest {
+  int64 operator_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 comment_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+message GetCommentAuditDetailReply {
+  CommentDTO comment = 1;
+  PostDTO post = 2;
+}
+
+message AuditCommentRequest {
+  int64 operator_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 comment_id = 2 [(validate.rules).int64 = {gt: 0}];
+  int32 action = 3 [(validate.rules).int32 = {in: [1, 2]}]; // 仅允许 1(通过) 或 2(驳回)
+  string manual_review_reason = 4; // 业务逻辑中判断：若 action == 2，此项必填。Proto层面不做复杂联动校验。
+}
+message AuditCommentReply {}
+
+
+// =========================================================================
+// 乐学空间 - 全局搜索服务 (Search Service)
+// 底层全部对接 Elasticsearch，支撑 C端高频检索与 B端复杂过滤
+// =========================================================================
+service SearchService {
+
+  // ------------------------- 【1. 学生端 (C端)】 -------------------------
+
+  // 场景 1 & 2: 学生综合搜索知识帖 (支持关键词检索、按助教ID过滤)
+  rpc SearchStudentPosts (SearchStudentPostsRequest) returns (SearchPostsReply) {
+    option (google.api.http) = {
+      get: "/v1/student/search/posts"
+    };
+  }
+
+  // 场景 3: 学生搜索评论 (支持全局查"背单词"，或限定在某 post_id 下查)
+  rpc SearchStudentComments (SearchStudentCommentsRequest) returns (SearchCommentsReply) {
+    option (google.api.http) = {
+      get: "/v1/student/search/comments"
+    };
+  }
+
+  // ------------------------- 【2. 助教端 (B端前台)】 -------------------------
+
+  // 场景 4: 助教搜索自己发布的知识帖 (Token隐式获取 author_id，支持标题/内容关键词)
+  rpc SearchTutorPosts (SearchTutorPostsRequest) returns (SearchPostsReply) {
+    option (google.api.http) = {
+      get: "/v1/tutor/search/posts"
+    };
+  }
+
+  // 场景 5: 助教搜索某知识帖下的学生评论 (查反馈、找问题)
+  rpc SearchTutorComments (SearchTutorCommentsRequest) returns (SearchCommentsReply) {
+    option (google.api.http) = {
+      get: "/v1/tutor/posts/{post_id}/comments/search"
+    };
+  }
+
+  // ------------------------- 【3. 运营端 (B端后台)】 -------------------------
+
+  // 场景 6 & 7: 运营全能审核工作台检索 (查待审、查历史审核记录、违规溯源)
+  rpc SearchOperatorComments (SearchOperatorCommentsRequest) returns (SearchCommentsReply) {
+    option (google.api.http) = {
+      get: "/v1/operator/search/comments"
+    };
+  }
+}
+
+// =========================================================================
+// 数据传输对象 DTO (Data Transfer Object)
+// =========================================================================
+
+
+// 帖子列表通用响应
+message SearchPostsReply {
+  int64 total = 1;
+  repeated PostDTO items = 2;
+}
+
+// 评论列表通用响应
+message SearchCommentsReply {
+  int64 total = 1;
+  repeated CommentDTO items = 2;
+}
+
+
+// =========================================================================
+// 请求参数定义 (Request)
+// =========================================================================
+
+// --- C端：学生搜帖子 ---
+message SearchStudentPostsRequest {
+  string keyword = 1;        // (对应场景1) 关键词搜标题/内容
+  int64 tutor_id = 2;        // (对应场景2) 可选，只看某老师的帖子
+  int32 page_num = 3;
+  int32 page_size = 4;
+}
+
+// --- C端：学生搜评论 ---
+message SearchStudentCommentsRequest {
+  string keyword = 1;        // (对应场景3) 关键词搜"背单词"等
+  int64 post_id = 2;         // 可选，限定在某个帖子下
+  int32 page_num = 3;
+  int32 page_size = 4;
+}
+
+// --- B端前台：助教搜自己的帖子 ---
+message SearchTutorPostsRequest {
+  string keyword = 1;        // (对应场景1) 关键词搜标题/内容
+  int64 tutor_id = 2;        // (对应场景2) 可选，只看某老师的帖子
+  int32 page_num = 3;
+  int32 page_size = 4;
+}
+
+// --- B端前台：助教搜某帖子的评论 ---
+message SearchTutorCommentsRequest {
+  int64 post_id = 1;         // (对应场景5) 必填，从 URL Path 获取
+  string keyword = 2;        // 搜索"不会"、"听力"
+  int32 page_num = 3;
+  int32 page_size = 4;
+}
+
+// --- B端后台：运营检索评论 (全能查询体) ---
+message SearchOperatorCommentsRequest {
+  // (对应场景6) 查待审核时传 0；(对应场景7) 查记录传 1 或 2，查全部传 -1
+  int32 audit_status = 1;
+
+  string keyword = 2;        // 查包含违规词的评论内容
+
+  // --- 以下为场景7专用的历史追溯字段 ---
+  int64 manual_operator_id = 3; // 查某位运营同事处理过的数据
+  string review_reason = 4;     // 根据驳回原因模糊搜索
+  int64 start_time = 5;         // 时间范围：开始时间戳
+  int64 end_time = 6;           // 时间范围：结束时间戳
+
+  int32 page_num = 7;
+  int32 page_size = 8;
+}

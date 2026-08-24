@@ -27,12 +27,12 @@ BFF / mall-service / agent-service
 certs/mtls/ca.crt
 certs/mtls/comment-service.crt
 certs/mtls/comment-service.key
-certs/mtls/student-bff.crt
-certs/mtls/student-bff.key
-certs/mtls/tutor-bff.crt
-certs/mtls/tutor-bff.key
-certs/mtls/operator-bff.crt
-certs/mtls/operator-bff.key
+certs/mtls/comment-student.crt
+certs/mtls/comment-student.key
+certs/mtls/comment-tutor.crt
+certs/mtls/comment-tutor.key
+certs/mtls/comment-operator.crt
+certs/mtls/comment-operator.key
 ```
 
 默认不会覆盖已有证书。需要重新生成时：
@@ -58,9 +58,9 @@ server:
       cert_file: ../certs/mtls/comment-service.crt
       key_file: ../certs/mtls/comment-service.key
       allowed_clients:
-        - student-bff
-        - tutor-bff
-        - operator-bff
+        - comment-student
+        - comment-tutor
+        - comment-operator
 ```
 
 服务端会执行两层校验：
@@ -72,7 +72,7 @@ server:
 
 ## BFF 客户端配置
 
-student-bff 调 comment-service 时开启 mTLS：
+comment-student 调 comment-service 时开启 mTLS：
 
 ```yaml
 client:
@@ -82,8 +82,8 @@ client:
     tls:
       enabled: true
       ca_file: ../certs/mtls/ca.crt
-      cert_file: ../certs/mtls/student-bff.crt
-      key_file: ../certs/mtls/student-bff.key
+      cert_file: ../certs/mtls/comment-student.crt
+      key_file: ../certs/mtls/comment-student.key
       server_name: comment-service
 ```
 

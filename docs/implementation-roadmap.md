@@ -19,7 +19,9 @@
 根据当前代码与 `/Users/yaowy/Documents/项目复习笔记/乐学空间` 中的复习笔记对照，项目已经具备以下主体能力：
 
 - `comment-service` 已提供学生端、助教端、运营端和搜索相关 gRPC/HTTP 接口定义。
-- `student-bff` 已实现学生端 HTTP 接入层，并通过 gRPC client 调用 `comment-service`。
+- `comment-student` 已实现学生端 HTTP 接入层，并通过 gRPC client 调用 `comment-service`。
+- `comment-tutor` 已新增助教端 HTTP 接入层，并通过 gRPC client 调用 `comment-service`。
+- `comment-operator` 已新增运营端 HTTP 接入层，并通过 gRPC client 调用 `comment-service`。
 - 帖子详情读链路已经具备 Core/Stats 拆分缓存、Redis Cache-Aside、singleflight 和统计 delta 叠加。
 - 评论列表已采用列表 ID 缓存 + 评论对象缓存的两级结构，并支持批量 MGET 与 MySQL IN 回源。
 - RedisBloom 相关代码已出现，按 post/comment ID 做缓存穿透拦截，并在 RedisBloom 不可用时放行。
@@ -46,11 +48,11 @@
 - [ ] 增加登出接口：
   - 删除或撤销 refresh token。
   - 可选维护 access token 黑名单，处理强制退出或封禁。
-- [ ] 改造 `student-bff/internal/auth`：
+- [ ] 改造三端 `internal/auth`：
   - 不再信任 `x-user-id`。
   - 从 JWT 或 opaque token 中解析可信身份。
   - 把 user_id、role 注入 context。
-- [ ] 扩展助教端和运营端 BFF 鉴权：
+- [x] 扩展助教端和运营端 BFF 基础鉴权：
   - 学生端只允许学生角色。
   - 助教端只允许助教角色。
   - 运营端只允许运营角色。
@@ -93,8 +95,8 @@
 
 ### P1：复习笔记中提到但需要继续补强的功能
 
-- [ ] 完整补齐 tutor-bff 和 operator-bff。
-  - 当前仓库只有 `student-bff`，但复习笔记描述的是学生端、助教端、运营端三个 BFF。
+- [x] 新增 `comment-tutor` 和 `comment-operator` 基础微服务。
+  - 当前仓库已包含 `comment-student`、`comment-tutor`、`comment-operator` 三端入口服务。
   - 后续应让三端 BFF 都只负责入口鉴权、参数组装和场景编排，领域规则仍沉到 `comment-service`。
 - [ ] 增加统一 auth/user context 传递机制。
   - BFF 从 token 得到身份。
@@ -169,7 +171,7 @@
 ### 第一阶段：入口安全基建
 
 1. 先实现用户注册、登录、JWT access token、refresh token。
-2. 改造 student-bff 鉴权，不再信任 `x-user-id`。
+2. 改造三端 BFF 鉴权，不再信任 `x-user-id`。
 3. 补充 token 单元测试和登录接口文档。
 
 原因：后续限流、权限和审计都依赖可信 user_id/role。如果身份来源不可信，所有“按用户限流”和“资源归属校验”的解释都会站不稳。
@@ -184,7 +186,7 @@
 
 ### 第三阶段：补齐复习笔记与代码差距
 
-1. 补 tutor-bff/operator-bff。
+1. 完善 comment-tutor/comment-operator。
 2. 补自动审核、审计日志。
 3. 补 ES mapping、重建、对账。
 4. 补 Bloom 预热与重建。

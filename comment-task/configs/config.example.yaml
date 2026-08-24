@@ -1,0 +1,26 @@
+server:
+  http:
+    addr: 0.0.0.0:8000
+    timeout: 1s
+  grpc:
+    addr: 0.0.0.0:9001
+    timeout: 1s
+data:
+  database:
+    driver: mysql
+    source: "root:root1234@tcp(127.0.0.1:3306)/comment?parseTime=True&loc=Local"
+  redis:
+    network: tcp
+    addr: 127.0.0.1:6379
+    pass: ""
+    read_timeout: 0.2s
+    write_timeout: 0.2s
+kafka:
+  brokers:
+    - "127.0.0.1:9092"
+  group_id: "comment-task"
+  topic: "comment-service"
+elasticsearch:
+  addresses:
+    - "http://127.0.0.1:9200"
+  index: "comment"

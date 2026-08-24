@@ -43,7 +43,7 @@ func main() {
 
 	// 通常复用项目中已有的SQL连接配置db(*gorm.DB)
 	// 非必需，但如果需要复用连接时的gorm.Config或需要连接数据库同步表信息则必须设置
-	g.UseDB(connectDB("root:Yaowy2001@tcp(8.130.97.97:13306)/comment?parseTime=True&loc=Local"))
+	g.UseDB(connectDB("root:root1234@tcp(127.0.0.1:3306)/comment?parseTime=True&loc=Local"))
 
 	// 从连接的数据库为所有表生成Model结构体和CRUD代码
 	// 也可以手动指定需要生成代码的数据表

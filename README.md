@@ -41,6 +41,28 @@
 - OpenTelemetry / tracing
 - k6 压测脚本
 
+### 本地依赖启动
+
+项目根目录提供了 `docker-compose.yml`，用于启动本地中间件依赖，不再依赖远程 MySQL/Redis。
+
+```bash
+docker compose up -d
+```
+
+本地组件端口：
+
+| 组件 | 地址 |
+| --- | --- |
+| MySQL | `127.0.0.1:3306`，账号 `root`，密码 `root1234`，库名 `comment` |
+| Redis Stack / RedisBloom | `127.0.0.1:6379` |
+| Consul | `127.0.0.1:8500` |
+| Kafka | `127.0.0.1:9092` |
+| Kafka UI | `http://127.0.0.1:8090` |
+| Elasticsearch | `http://127.0.0.1:9200` |
+| Kibana | `http://127.0.0.1:5601` |
+
+MySQL 首次启动会执行 `comment-service/sql/comment.sql` 初始化表结构。如果已经存在旧 volume，需要先确认是否要保留数据。
+
 ### 已完成工作
 
 - 已初始化 Git 仓库并推送到 GitHub：`https://github.com/weiyi-ch/Comment-Project.git`
@@ -145,6 +167,28 @@ This project is designed as more than a CRUD demo. It focuses on backend mechani
 - Canal binlog synchronization
 - OpenTelemetry / tracing
 - k6 load testing scripts
+
+### Local Dependencies
+
+The repository root provides `docker-compose.yml` for local middleware dependencies, so the project no longer depends on remote MySQL/Redis instances.
+
+```bash
+docker compose up -d
+```
+
+Local component endpoints:
+
+| Component | Endpoint |
+| --- | --- |
+| MySQL | `127.0.0.1:3306`, user `root`, password `root1234`, database `comment` |
+| Redis Stack / RedisBloom | `127.0.0.1:6379` |
+| Consul | `127.0.0.1:8500` |
+| Kafka | `127.0.0.1:9092` |
+| Kafka UI | `http://127.0.0.1:8090` |
+| Elasticsearch | `http://127.0.0.1:9200` |
+| Kibana | `http://127.0.0.1:5601` |
+
+MySQL runs `comment-service/sql/comment.sql` on first startup to initialize tables. If an old volume already exists, decide whether to keep or recreate the data first.
 
 ### Completed Work
 

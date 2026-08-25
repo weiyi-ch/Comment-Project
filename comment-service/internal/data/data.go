@@ -48,6 +48,7 @@ func NewData(db *gorm.DB, cache *redis.Client, es *elasticsearch.TypedClient, lo
 		postLikeDirtyWriter: newPostLikeDirtyWriterFromEnv(logger),
 	}
 	data.startCounterDirtyOutboxPublisher(outboxCtx)
+	data.startBloomWarmup(outboxCtx)
 	cleanup := func() {
 		helper.Info("closing the data resources")
 		cancelOutbox()

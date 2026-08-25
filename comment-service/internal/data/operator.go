@@ -915,6 +915,9 @@ func (r *operatorRepo) bloomExists(ctx context.Context, bloomKey string, id int6
 	if r.data.cache == nil || cachecontrol.Bypass(ctx) {
 		return true, nil
 	}
+	if !isBloomReady(ctx, r.data.cache, bloomReadyKey(bloomKey)) {
+		return true, nil
+	}
 
 	res, err := r.data.cache.Do(ctx, "BF.EXISTS", bloomKey, strconv.FormatInt(id, 10)).Int()
 	if err != nil {

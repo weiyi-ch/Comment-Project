@@ -46,8 +46,9 @@ This is a Go Kratos based backend review project for a learning-community commen
 
 3. MySQL 到 Elasticsearch 同步
    - MySQL 是事实源，ES 是搜索读模型。
-   - Canal/Kafka 推送变更，`comment-task` 消费后重查 MySQL 构建最新 ES 文档。
-   - 删除或源记录不存在时写 tombstone 文档，而不是直接物理删除，避免乱序消息导致旧数据复活。
+   - Canal/Kafka 推送 Entry protobuf 变更，`comment-task` 直接用 binlog 行数据构建 ES 文档，减少同步阶段回查 MySQL。
+   - ES 写入使用 `sync_binlog_file/sync_binlog_pos` 作为 `external_gte` 版本，旧消息、重复消息和乱序消息由 ES 内部原子比较拦截。
+   - 删除事件写 tombstone 文档，而不是直接物理删除，避免乱序消息导致旧数据复活。
    - ES 写入失败进入 `es_sync_retry`，多次失败后进入 `es_sync_dlq`。
 
 4. 身份认证与限流
@@ -59,7 +60,9 @@ This is a Go Kratos based backend review project for a learning-community commen
 
 ### 本地启动
 
-项目根目录提供 `docker-compose.yml`，本地直接启动 MySQL、Redis、Consul、Kafka、Kafka UI、Elasticsearch 和 Kibana。镜像优先使用 `docker.aityp.com` 可搜索到的镜像站地址，减少直接拉取海外镜像失败的问题。
+项目根目录提供 `docker-compose.yml`，本地直接启动 MySQL、Redis、Consul、Kafka、Kafka UI、Canal、Elasticsearch 和 Kibana。镜像优先使用 `docker.aityp.com` 可搜索到的镜像站地址，减少直接拉取海外镜像失败的问题。
+
+本地 Canal 链路使用 MySQL 8.0 镜像，因为当前 Canal 1.1.6 仍依赖 `SHOW MASTER STATUS` 和旧版 JDBC 认证流程，MySQL 8.4 会导致 binlog dump 失败。
 
 ```bash
 docker compose up -d
@@ -85,6 +88,19 @@ docker compose up -d
 docker compose exec -T mysql mysql -uroot -proot1234 < comment-service/sql/comment.sql
 ```
 
+如果本地已经存在旧的 `comment_mysql_data` volume，MySQL 初始化脚本不会再次自动创建 Canal 复制账号，可手动补一次：
+
+```bash
+docker compose exec mysql mysql -uroot -proot1234 -e "CREATE USER IF NOT EXISTS 'canal'@'%' IDENTIFIED WITH mysql_native_password BY 'canal'; ALTER USER 'canal'@'%' IDENTIFIED WITH mysql_native_password BY 'canal'; GRANT SELECT, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'canal'@'%'; FLUSH PRIVILEGES;"
+```
+
+如果这个 volume 曾经由 MySQL 8.4 初始化过，切换到 MySQL 8.0 前需要重新初始化本地数据：
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
 | 组件 | 地址 |
 | --- | --- |
 | MySQL | `127.0.0.1:3306`，账号 `root`，密码 `root1234`，库名 `comment` |
@@ -92,6 +108,7 @@ docker compose exec -T mysql mysql -uroot -proot1234 < comment-service/sql/comme
 | Consul | `127.0.0.1:8500` |
 | Kafka | `127.0.0.1:9092` |
 | Kafka UI | `http://127.0.0.1:8090` |
+| Canal | TCP `127.0.0.1:11111`，Admin `127.0.0.1:11110`，Metrics `127.0.0.1:11112` |
 | Elasticsearch | `http://127.0.0.1:9200` |
 | Kibana | `http://127.0.0.1:5601` |
 
@@ -105,21 +122,35 @@ docker compose exec -T mysql mysql -uroot -proot1234 < comment-service/sql/comme
 - [x] 帖子 Core/Stats 拆分缓存，评论列表 ID 缓存和评论对象缓存。
 - [x] 点赞关系事实表、`post_counter` 计数表、Redis delta 聚合、batch 异步落库。
 - [x] 计数校准任务，避免在异步增量未清空时覆盖新数据。
-- [x] Canal/Kafka 到 ES 同步链路，支持 tombstone、retry 和 DLQ。
+- [x] Kafka 到 ES 的消费侧同步链路，支持 tombstone、retry、DLQ 和 ES external version 幂等写入。
+- [x] 本地 Canal 容器、MySQL binlog 初始化和表级 topic 路由：`comment.post -> post`，`comment.study_comment -> comment`。
+- [x] 服务注册与发现：基于 Consul 完成 `comment-service` 注册、三端 BFF 发现、健康检查和本地启动链路说明。
 
 ### TODO
+
+P1 数据一致性与搜索治理：
+
+- [ ] 增加 ES mapping 初始化、索引 alias、全量重建和 MySQL/ES 对账任务。
+- [ ] 增加 ES 同步 checkpoint 和同步延迟监控，记录最新 binlog 位点、事件时间、写入 ES 时间、retry/DLQ 积压和对账差异。
+- [ ] 增加 MySQL/ES 未知不一致修复：定期扫描 MySQL 事实表，发现 ES 缺文档、字段 hash 不一致、删除状态泄漏或历史 mapping 漂移后自动重建文档。
+- [ ] 搜索链路优化复盘：区分普通搜索、热点搜索、详情页缓存和运营审核搜索，评估是否继续保留评论搜索短缓存。
+- [ ] 增加 RedisBloom 预热和重建任务。
+
+P2 安全、审核与流量治理：
 
 - [ ] 将多维令牌桶扩展到助教端和运营端。
 - [ ] 给登录、点赞、评论、搜索增加更细的资源维度限流。
 - [ ] 增加 Redis 不可用时的本地限流降级。
 - [ ] 增加敏感词或机器审核模块。
 - [ ] 增加审核操作记录和审计查询。
-- [ ] 增加 ES mapping 初始化、索引 alias、全量重建和 MySQL/ES 对账任务。
-- [ ] 增加 RedisBloom 预热和重建任务。
+
+P3 测试与压测：
+
 - [ ] 完善异步计数、限流、ES 同步、BFF metadata 的单元测试和集成测试。
 - [ ] 补充 k6 压测脚本和一致性校验脚本。
 
 更多路线见：[docs/implementation-roadmap.md](docs/implementation-roadmap.md)。
+服务注册与发现说明见：[docs/service-discovery-consul.md](docs/service-discovery-consul.md)。
 
 ## English README
 
@@ -163,8 +194,9 @@ The project is not a plain CRUD demo. It focuses on backend problems that are im
 
 3. MySQL-to-Elasticsearch synchronization
    - MySQL is the source of truth. Elasticsearch is the search read model.
-   - Canal/Kafka publishes changes. `comment-task` consumes events and reloads the latest MySQL row before indexing.
-   - Missing or deleted source rows are indexed as tombstone documents instead of being physically deleted, preventing out-of-order events from resurrecting stale documents.
+   - Canal/Kafka publishes Entry protobuf changes. `comment-task` builds ES documents directly from binlog row data, reducing extra MySQL reads during synchronization.
+   - ES writes use `sync_binlog_file/sync_binlog_pos` as an `external_gte` version, so stale, duplicate, and out-of-order events are rejected atomically inside Elasticsearch.
+   - Deleted rows are indexed as tombstone documents instead of being physically deleted, preventing out-of-order events from resurrecting stale documents.
    - Failed ES writes are stored in `es_sync_retry`; permanently failed records are moved to `es_sync_dlq`.
 
 4. Authentication and rate limiting
@@ -176,7 +208,9 @@ The project is not a plain CRUD demo. It focuses on backend problems that are im
 
 ### Local Startup
 
-The repository root contains `docker-compose.yml` for local MySQL, Redis, Consul, Kafka, Kafka UI, Elasticsearch, and Kibana. Images prefer mirror addresses discoverable through `docker.aityp.com`.
+The repository root contains `docker-compose.yml` for local MySQL, Redis, Consul, Kafka, Kafka UI, Canal, Elasticsearch, and Kibana. Images prefer mirror addresses discoverable through `docker.aityp.com`.
+
+The local Canal pipeline uses MySQL 8.0 because Canal 1.1.6 still depends on `SHOW MASTER STATUS` and the older JDBC authentication flow. MySQL 8.4 breaks binlog dumping for this Canal version.
 
 ```bash
 docker compose up -d
@@ -202,6 +236,19 @@ If only the MySQL `comment` database or some tables were manually deleted, run:
 docker compose exec -T mysql mysql -uroot -proot1234 < comment-service/sql/comment.sql
 ```
 
+If an old `comment_mysql_data` volume already exists, MySQL init scripts will not automatically create the Canal replication user again. Run this once if needed:
+
+```bash
+docker compose exec mysql mysql -uroot -proot1234 -e "CREATE USER IF NOT EXISTS 'canal'@'%' IDENTIFIED WITH mysql_native_password BY 'canal'; ALTER USER 'canal'@'%' IDENTIFIED WITH mysql_native_password BY 'canal'; GRANT SELECT, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'canal'@'%'; FLUSH PRIVILEGES;"
+```
+
+If the volume was initialized by MySQL 8.4, reset local data before switching to MySQL 8.0:
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
 | Component | Endpoint |
 | --- | --- |
 | MySQL | `127.0.0.1:3306`, user `root`, password `root1234`, database `comment` |
@@ -209,6 +256,7 @@ docker compose exec -T mysql mysql -uroot -proot1234 < comment-service/sql/comme
 | Consul | `127.0.0.1:8500` |
 | Kafka | `127.0.0.1:9092` |
 | Kafka UI | `http://127.0.0.1:8090` |
+| Canal | TCP `127.0.0.1:11111`, Admin `127.0.0.1:11110`, Metrics `127.0.0.1:11112` |
 | Elasticsearch | `http://127.0.0.1:9200` |
 | Kibana | `http://127.0.0.1:5601` |
 
@@ -223,16 +271,31 @@ docker compose exec -T mysql mysql -uroot -proot1234 < comment-service/sql/comme
 - [x] Post Core/Stats split caching and comment list/object two-level caching.
 - [x] Like fact table, `post_counter`, Redis delta aggregation, and batch-based async counter flushing.
 - [x] Counter reconciliation that avoids overwriting unflushed async deltas.
-- [x] Canal/Kafka-to-ES synchronization with tombstone documents, retry, and DLQ.
+- [x] Kafka-to-ES consumer-side synchronization with tombstone documents, retry, DLQ, and Elasticsearch external-version idempotent writes.
+- [x] Local Canal container, MySQL binlog setup, and table-level topic routing: `comment.post -> post`, `comment.study_comment -> comment`.
+- [x] Service registration and discovery with Consul, including `comment-service` registration, BFF discovery, health checks, and local startup flow.
 
 ### TODO
+
+P1 Data Consistency And Search Governance:
+
+- [ ] Add ES mapping initialization, index aliases, full rebuild, and MySQL/ES reconciliation.
+- [ ] Add ES sync checkpoints and lag monitoring for latest binlog position, event time, ES write time, retry/DLQ backlog, and reconciliation diffs.
+- [ ] Add unknown MySQL/ES inconsistency repair by periodically scanning MySQL fact tables and rebuilding ES documents when documents are missing, source hashes differ, delete visibility leaks, or historical mappings drift.
+- [ ] Review and refine the search flow by separating normal search, hot-query search, detail-page caching, and operator moderation search; reassess whether short-lived comment search caching should remain.
+- [ ] Add RedisBloom warm-up and rebuild tasks.
+
+P2 Security, Moderation, And Traffic Governance:
 
 - [ ] Extend multi-dimensional rate limiting to tutor and operator BFF services.
 - [ ] Add resource-level rate limiting for login, like, comment, and search APIs.
 - [ ] Add local fallback rate limiting when Redis is unavailable.
 - [ ] Add sensitive-word or machine-review support.
 - [ ] Add moderation operation records and audit queries.
-- [ ] Add ES mapping initialization, index aliases, full rebuild, and MySQL/ES reconciliation.
-- [ ] Add RedisBloom warm-up and rebuild tasks.
+
+P3 Testing And Load Testing:
+
 - [ ] Add unit and integration tests for async counters, rate limiting, ES sync, and BFF metadata.
 - [ ] Add k6 load testing scripts and consistency verification scripts.
+
+Service registration and discovery notes: [docs/service-discovery-consul.md](docs/service-discovery-consul.md).

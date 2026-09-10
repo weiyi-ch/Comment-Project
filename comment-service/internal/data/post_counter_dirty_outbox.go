@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	counterDirtyOutboxTableDDL     = "CREATE TABLE IF NOT EXISTS counter_dirty_outbox (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, event_type VARCHAR(64) NOT NULL, post_id BIGINT NOT NULL, status VARCHAR(32) NOT NULL DEFAULT 'pending', retry_count INT NOT NULL DEFAULT 0, next_retry_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, last_error VARCHAR(512) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, KEY idx_dirty_outbox_status_retry (status, next_retry_at), KEY idx_dirty_outbox_post (post_id, event_type, status))"
+	counterDirtyOutboxTableDDL     = "CREATE TABLE IF NOT EXISTS counter_dirty_outbox (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, event_type VARCHAR(64) NOT NULL, post_id BIGINT NOT NULL, status VARCHAR(32) NOT NULL DEFAULT 'pending', retry_count INT NOT NULL DEFAULT 0, next_retry_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, last_error VARCHAR(512) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, KEY idx_dirty_outbox_status_retry (status, next_retry_at), KEY idx_dirty_outbox_status_retry_id (status, next_retry_at, id), KEY idx_dirty_outbox_status_updated_id (status, updated_at, id), KEY idx_dirty_outbox_post (post_id, event_type, status))"
 	counterDirtyOutboxScanInterval = time.Second
 	counterDirtyOutboxBatchSize    = 100
 	counterDirtyOutboxRetryDelay   = 3 * time.Second

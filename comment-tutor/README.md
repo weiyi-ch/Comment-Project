@@ -1,70 +1,84 @@
 # comment-tutor
 
-`comment-tutor` is the tutor-facing BFF for `comment-service`.
+`comment-tutor` 是助教端 BFF，负责助教端 HTTP 接口、access token 鉴权、发帖、帖子管理、评论管理、回复和搜索入口，并通过 gRPC 调用 `comment-service`。
 
-It accepts HTTP requests from the student client, extracts the student identity from headers, and calls `comment-service` through the generated gRPC clients in `api/comment/v1`.
-It keeps its own protocol SDK under `api/comment/v1`, generated from the same `comment.proto` contract used by `comment-service`.
-
-Runtime service lookup uses Consul discovery:
+## 运行链路
 
 ```text
-comment-tutor -> Consul -> comment-service -> gRPC
+Tutor HTTP
+ -> comment-tutor
+ -> Consul discovery
+ -> comment-service gRPC
 ```
 
-## Run
+`comment-tutor` 启动后会注册到 Consul；调用核心服务时，如果没有配置直连 `endpoint`，就使用 `discovery:///comment-service` 从 Consul 发现实例。
 
-Start Consul first. Then start `comment-service` so it registers itself as `comment-service`.
-After that, run:
+## 本地启动
 
 ```bash
+docker compose up -d consul mysql redis elasticsearch kafka kafka-ui canal
+
+cd comment-service
+go run ./cmd/comment-service -conf ./configs
+
+cd ../comment-tutor
 go run ./cmd/comment-tutor -conf ./configs/config.yaml
 ```
 
-Default BFF address:
+默认地址：
 
 ```text
-http://127.0.0.1:8081
+http://127.0.0.1:8082
 ```
 
-Default discovery config:
+健康检查：
+
+```bash
+curl http://127.0.0.1:8082/health
+```
+
+## 配置
 
 ```yaml
 registry:
   consul:
     address: 127.0.0.1:8500
+    scheme: http
 client:
   comment_service:
     service_name: comment-service
+    timeout: 2s
 ```
 
-## Auth headers
-
-For local development, pass one of:
+## 主要接口
 
 ```text
-x-user-id: 1001
-x-role: student
+POST   /api/tutor/auth/register
+POST   /api/tutor/auth/login
+POST   /api/tutor/auth/refresh
+POST   /api/tutor/auth/logout
+GET    /api/tutor/posts
+POST   /api/tutor/posts
+GET    /api/tutor/posts/{post_id}
+PUT    /api/tutor/posts/{post_id}
+DELETE /api/tutor/posts/{post_id}
+GET    /api/tutor/posts/{post_id}/comments
+GET    /api/tutor/comments/{comment_id}
+DELETE /api/tutor/comments/{comment_id}
+POST   /api/tutor/comments/{comment_id}/reply
+DELETE /api/tutor/replies/{reply_id}
+GET    /api/tutor/search/posts
+GET    /api/tutor/posts/{post_id}/comments/search
 ```
 
-or:
+## English Notes
+
+`comment-tutor` is the tutor-facing BFF. It exposes tutor HTTP APIs for post management, comment management, replies, and search, then calls `comment-service` through gRPC.
+
+Runtime lookup uses Consul:
 
 ```text
-Authorization: Bearer student:1001
+comment-tutor -> Consul discovery -> comment-service -> gRPC
 ```
 
-In production, replace `internal/auth` with real JWT/session validation while keeping the same user context boundary.
-
-## Main routes
-
-```text
-GET    /api/student/posts/{post_id}
-GET    /api/student/posts/{post_id}/comments
-POST   /api/student/posts/{post_id}/comments
-GET    /api/student/comments
-GET    /api/student/comments/{comment_id}
-DELETE /api/student/comments/{comment_id}
-POST   /api/student/posts/{post_id}/like
-DELETE /api/student/posts/{post_id}/like
-GET    /api/student/search/posts
-GET    /api/student/search/comments
-```
+Default address: `http://127.0.0.1:8082`.

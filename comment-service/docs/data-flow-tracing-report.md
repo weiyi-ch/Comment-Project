@@ -66,7 +66,7 @@ collectCommentIDs(comments) -> []int64
 复杂度顺序：
 
 1. `GetPostDetailStudent`：帖子详情聚合，访问帖子、评论、回复，涉及 Redis/MySQL/Bloom/singleflight。
-2. `SearchStudentPosts`：帖子搜索，访问 Redis 搜索缓存和 ES。
+2. `SearchStudentPosts`：帖子搜索，直接访问 ES，并在返回前补 `post_counter` 和 Redis 计数 delta。
 3. `SearchStudentComments`：评论搜索，访问 Redis 搜索缓存和 ES，并带学生端可见性边界。
 4. `LikePost` / `UnlikePost`：并发写，涉及 Redis 短锁、MySQL 关系写、Redis delta 和异步计数落库。
 5. `CreateComment`：写评论，涉及 MySQL 事务、Bloom、帖子缓存和列表缓存失效。
@@ -170,12 +170,10 @@ flowchart TD
     B --> C["SearchUsecase.SearchStudentPosts"]
     C --> D["构造 PostSearchParam\nstatus=1，可选 tutor_id"]
     D --> E["searchRepo.SearchPostsFromES"]
-    E --> F["Redis es:post_search:{hash}"]
-    F -->|hit| J["assemblePostDTOs"]
-    F -->|miss| G["singleflight"]
-    G --> H["Elasticsearch post\nfilter status/author\nmulti_match title/content"]
-    H --> I["提取轻量帖子字段\n回填搜索缓存 TTL=2min"]
-    I --> J
+    E --> H["Elasticsearch post\nfilter status/author\nmulti_match title/content"]
+    H --> I["提取轻量帖子字段"]
+    I --> L["批量补 post_counter\n叠加 Redis pending/processing delta"]
+    L --> J["assemblePostDTOs"]
     J --> K["SearchPostsReply"]
 ```
 
@@ -775,12 +773,10 @@ flowchart TD
     B --> C["SearchUsecase.SearchTutorPosts"]
     C --> D["构造 PostSearchParam\nauthor_id=tutor_id\nstatus=all"]
     D --> E["searchRepo.SearchPostsFromES"]
-    E --> F["Redis es:post_search:{hash}"]
-    F -->|hit| J["assemblePostDTOs"]
-    F -->|miss| G["singleflight"]
-    G --> H["Elasticsearch post\nfilter author_id\nmulti_match title/content"]
-    H --> I["回填搜索缓存 TTL=2min"]
-    I --> J
+    E --> H["Elasticsearch post\nfilter author_id\nmulti_match title/content"]
+    H --> I["提取轻量帖子字段"]
+    I --> L["批量补 post_counter\n叠加 Redis pending/processing delta"]
+    L --> J["assemblePostDTOs"]
     J --> K["SearchPostsReply"]
 ```
 

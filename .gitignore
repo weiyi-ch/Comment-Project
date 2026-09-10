@@ -6,6 +6,7 @@
 
 # Build / test output
 bin/
+comment-service/reports/k6/*.json
 *.exe
 *.exe~
 *.dll

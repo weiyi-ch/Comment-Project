@@ -19,7 +19,7 @@ kafka:
   brokers:
     - "127.0.0.1:9092"
   group_id: "comment-task"
-  topic: "comment-service"
+  topic: "post,comment"
 elasticsearch:
   addresses:
     - "http://127.0.0.1:9200"

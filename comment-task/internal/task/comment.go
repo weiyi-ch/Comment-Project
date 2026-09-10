@@ -3,13 +3,16 @@ package task
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
 	"comment-task/internal/data"
 
 	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/versiontype"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/segmentio/kafka-go"
 )
@@ -69,6 +72,10 @@ func (js *JobWorker) Start(ctx context.Context) error {
 		// ES 写成功，或者失败事件已可靠写入 retry 表后才提交。
 		m, err := js.kafkaReader.FetchMessage(ctx)
 		if err != nil {
+			if ctx.Err() != nil || errors.Is(err, io.EOF) {
+				js.log.Debugf("canal kafka reader closed: %v", err)
+				return nil
+			}
 			js.log.Errorf("read from kafka error: %v", err)
 			return err
 		}
@@ -133,17 +140,28 @@ func getDocIDAndIndex(table string, row map[string]interface{}) (string, string,
 }
 
 // indexDocument 索引文档。
-func (js *JobWorker) indexDocument(ctx context.Context, docID string, data map[string]interface{}, targetIndex string) error {
-	resp, err := js.esClient.esClient.Index(targetIndex).
+func (js *JobWorker) indexDocument(ctx context.Context, docID string, data map[string]interface{}, targetIndex string, version esSyncVersion) error {
+	req := js.esClient.esClient.Index(targetIndex).
 		Id(docID).
-		Document(data).
-		Do(ctx)
+		Document(data)
 
+	if externalVersion, ok := externalESSyncVersion(version); ok {
+		// external_gte 让 ES 在 primary shard 内原子完成版本比较和写入。
+		// 相同 binlog 位点的重复投递可以幂等覆盖，旧位点并发晚到会被 ES 拒绝。
+		req = req.Version(externalVersion).VersionType(versiontype.Externalgte)
+	}
+
+	resp, err := req.Do(ctx)
 	if err != nil {
+		if isESVersionConflict(err) {
+			js.log.Debugf("skip stale es sync by external version conflict, index=%s, id=%s, version=%s:%d",
+				targetIndex, docID, version.File, version.Pos)
+			return nil
+		}
 		return err
 	}
 
-	js.log.Debugf("写入 ES 成功 [INSERT], index=%s, id=%s, result=%v", targetIndex, docID, resp.Result)
+	js.log.Debugf("写入 ES 成功, index=%s, id=%s, result=%v", targetIndex, docID, resp.Result)
 	return nil
 }
 

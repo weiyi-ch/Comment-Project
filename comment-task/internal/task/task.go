@@ -15,7 +15,7 @@ import (
 const (
 	// defaultPostLikeDirtyTopic 是点赞/取消点赞计数 dirty 通知的默认 topic。
 	//
-	// Canal 数据库变更继续使用 configs/config.yaml 中的 comment-service topic；
+	// Canal 数据库变更使用 configs/config.yaml 中的 post/comment topics；
 	// postlike 只承载“某个 post_id 需要刷计数”的轻量通知，真正的计数落到 post_counter，避免污染 post 的 Canal 消息流。
 	defaultPostLikeDirtyTopic = "postlike"
 	// defaultPostLikeDirtyBroker 在本地未配置 Kafka broker 时兜底使用。
@@ -55,13 +55,30 @@ func NewJobWorker(canalKafka *CanalKafkaReader, postLikeKafka *PostLikeKafkaRead
 // NewKafkaReader 创建 Canal 消息消费者。
 //
 // 当前 Kafka 消息主要用于把 MySQL 变更同步到 Elasticsearch。
+// topic 支持逗号分隔：Canal 会把 comment.post 路由到 post topic，把 comment.study_comment 路由到 comment topic。
 func NewKafkaReader(kafka2 *conf.Kafka) *CanalKafkaReader {
-	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:  kafka2.Brokers,
-		GroupID:  kafka2.GroupId, // 指定消费者组id
-		Topic:    kafka2.Topic,
+	brokers := kafka2.Brokers
+	if envBrokers := firstNonEmpty(os.Getenv("CANAL_KAFKA_BROKERS"), os.Getenv("KAFKA_BROKERS")); envBrokers != "" {
+		brokers = splitCSV(envBrokers)
+	}
+	if len(brokers) == 0 {
+		brokers = []string{defaultPostLikeDirtyBroker}
+	}
+
+	topics := splitCSV(firstNonEmpty(os.Getenv("CANAL_KAFKA_TOPICS"), kafka2.Topic, "post,comment"))
+	groupID := firstNonEmpty(os.Getenv("CANAL_KAFKA_GROUP_ID"), kafka2.GroupId, "comment-task")
+	readerConfig := kafka.ReaderConfig{
+		Brokers:  brokers,
+		GroupID:  groupID,
 		MaxBytes: 10e6, // 10MB
-	})
+	}
+	if len(topics) == 1 {
+		readerConfig.Topic = topics[0]
+	} else {
+		readerConfig.GroupTopics = topics
+	}
+
+	r := kafka.NewReader(readerConfig)
 	return &CanalKafkaReader{Reader: r}
 }
 

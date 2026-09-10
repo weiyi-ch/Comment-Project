@@ -8,7 +8,7 @@
 - 助教端：发帖、编辑/删除帖子、查看自己帖子、查看评论、回复评论、删除回复、删除帖子下评论。
 - 运营端：审核评论、查询待审核列表、搜索评论、查看帖子和审核详情。
 - 帖子详情链路：帖子 Core/Stats 分离缓存，评论使用列表 ID 缓存 + `mysql:comment:{comment_id}` 对象缓存，读侧叠加 Redis pending/processing 计数 delta。
-- 搜索链路：MySQL 通过 Canal/Kafka 同步到 Elasticsearch，`comment-task` 回查 MySQL 最新数据构建 ES 文档，并用同步位点做幂等和乱序控制。
+- 搜索链路：MySQL 通过 Canal/Kafka 同步到 Elasticsearch，`comment-task` 解析 Entry protobuf 并直接用 binlog 行数据构建 ES 文档，再用同步位点做幂等和乱序控制。
 - 热点计数：`post_like` 和评论记录同步保存事实数据，`post_counter.like_count/comment_count` 通过 Redis pending/processing、Kafka dirty 通知和 `comment-task` zset 调度异步聚合落库，避免高频计数更新污染 `post` 表 binlog。
 
 ## English Summary
@@ -21,7 +21,7 @@ Key capabilities:
 - Tutor workflows: create/update/delete posts, view own posts, view comments, reply to comments, delete replies, and delete comments under owned posts.
 - Operator workflows: review comments, query pending moderation lists, search comments, and view post/moderation details.
 - Post detail reads use split Core/Stats caching. Counter values come from `post_counter` plus Redis pending/processing deltas.
-- Search synchronization uses Canal/Kafka and `comment-task`; ES writes use binlog position checks for idempotency and out-of-order protection.
+- Search synchronization uses Canal/Kafka and `comment-task`; Entry protobuf row data builds ES documents directly, and ES writes use binlog position checks for idempotency and out-of-order protection.
 - Hot counters are no longer stored in `post`. Like/comment deltas are aggregated through Redis/Kafka and flushed into `post_counter`.
 
 ## 文档入口
@@ -33,6 +33,7 @@ Key capabilities:
 3. [帖子点赞计数异步落库设计](docs/post-like-async-counter-design.md)
 4. [压测方案](docs/load-test-plan.md)
 5. [压测记录](docs/load-test-record.md)
+6. [服务注册与发现](../docs/service-discovery-consul.md)
 
 ## 本地常用命令
 

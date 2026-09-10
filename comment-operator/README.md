@@ -1,70 +1,77 @@
 # comment-operator
 
-`comment-operator` is the operator-facing BFF for `comment-service`.
+`comment-operator` 是运营端 BFF，负责运营端 HTTP 接口、access token 鉴权、评论审核、审核列表和运营搜索入口，并通过 gRPC 调用 `comment-service`。
 
-It accepts HTTP requests from the student client, extracts the student identity from headers, and calls `comment-service` through the generated gRPC clients in `api/comment/v1`.
-It keeps its own protocol SDK under `api/comment/v1`, generated from the same `comment.proto` contract used by `comment-service`.
-
-Runtime service lookup uses Consul discovery:
+## 运行链路
 
 ```text
-comment-operator -> Consul -> comment-service -> gRPC
+Operator HTTP
+ -> comment-operator
+ -> Consul discovery
+ -> comment-service gRPC
 ```
 
-## Run
+`comment-operator` 启动后会注册到 Consul；调用核心服务时，如果没有配置直连 `endpoint`，就使用 `discovery:///comment-service` 从 Consul 发现实例。
 
-Start Consul first. Then start `comment-service` so it registers itself as `comment-service`.
-After that, run:
+## 本地启动
 
 ```bash
+docker compose up -d consul mysql redis elasticsearch kafka kafka-ui canal
+
+cd comment-service
+go run ./cmd/comment-service -conf ./configs
+
+cd ../comment-operator
 go run ./cmd/comment-operator -conf ./configs/config.yaml
 ```
 
-Default BFF address:
+默认地址：
 
 ```text
-http://127.0.0.1:8081
+http://127.0.0.1:8083
 ```
 
-Default discovery config:
+健康检查：
+
+```bash
+curl http://127.0.0.1:8083/health
+```
+
+## 配置
 
 ```yaml
 registry:
   consul:
     address: 127.0.0.1:8500
+    scheme: http
 client:
   comment_service:
     service_name: comment-service
+    timeout: 2s
 ```
 
-## Auth headers
-
-For local development, pass one of:
+## 主要接口
 
 ```text
-x-user-id: 1001
-x-role: student
+POST   /api/operator/auth/register
+POST   /api/operator/auth/login
+POST   /api/operator/auth/refresh
+POST   /api/operator/auth/logout
+GET    /api/operator/posts/{post_id}
+GET    /api/operator/comments
+GET    /api/operator/comments/{comment_id}
+POST   /api/operator/comments/{comment_id}/audit
+GET    /api/operator/search/comments
 ```
 
-or:
+## English Notes
+
+`comment-operator` is the operator-facing BFF. It exposes operator HTTP APIs for comment moderation, moderation lists, and operator search, then calls `comment-service` through gRPC.
+
+Runtime lookup uses Consul:
 
 ```text
-Authorization: Bearer student:1001
+comment-operator -> Consul discovery -> comment-service -> gRPC
 ```
 
-In production, replace `internal/auth` with real JWT/session validation while keeping the same user context boundary.
-
-## Main routes
-
-```text
-GET    /api/student/posts/{post_id}
-GET    /api/student/posts/{post_id}/comments
-POST   /api/student/posts/{post_id}/comments
-GET    /api/student/comments
-GET    /api/student/comments/{comment_id}
-DELETE /api/student/comments/{comment_id}
-POST   /api/student/posts/{post_id}/like
-DELETE /api/student/posts/{post_id}/like
-GET    /api/student/search/posts
-GET    /api/student/search/comments
-```
+Default address: `http://127.0.0.1:8083`.

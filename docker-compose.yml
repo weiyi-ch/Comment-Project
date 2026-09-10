@@ -2,8 +2,9 @@ name: comment-project
 
 services:
   mysql:
-    # docker.aityp.com mirror of docker.io/mysql:8.4.0
-    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mysql:8.4.0
+    # docker.aityp.com mirror of docker.io/mysql:8.0.39
+    # Canal 1.1.6 still uses SHOW MASTER STATUS and the old JDBC auth flow, so local binlog sync uses MySQL 8.0.
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mysql:8.0.39
     container_name: comment-mysql
     restart: unless-stopped
     environment:
@@ -14,11 +15,17 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --default-time-zone=+08:00
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --binlog-row-image=FULL
+      - --default-authentication-plugin=mysql_native_password
     ports:
       - "3306:3306"
     volumes:
       - comment_mysql_data:/var/lib/mysql
       - ./comment-service/sql/comment.sql:/docker-entrypoint-initdb.d/01-comment.sql:ro
+      - ./configs/mysql/02-canal-user.sql:/docker-entrypoint-initdb.d/02-canal-user.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
       interval: 10s
@@ -87,19 +94,56 @@ services:
       timeout: 10s
       retries: 12
 
+  kafka-init:
+    # Create Canal topics explicitly so Kafka UI shows them before the first binlog event arrives.
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/bitnami/kafka:3.7
+    container_name: comment-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint:
+      - /bin/bash
+      - -ec
+      - |
+        kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic post --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic comment --partitions 1 --replication-factor 1
+
   kafka-ui:
     # Mirror selected from https://docker.aityp.com/image/ghcr.io/kafbat/kafka-ui:v1.4.2
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/ghcr.io/kafbat/kafka-ui:v1.4.2
     container_name: comment-kafka-ui
     restart: unless-stopped
     depends_on:
-      kafka:
-        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
     environment:
       KAFKA_CLUSTERS_0_NAME: comment-local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
     ports:
       - "8090:8080"
+
+  canal:
+    # docker.aityp.com mirror of docker.io/funnyzak/canal-server:latest
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/funnyzak/canal-server:latest
+    container_name: comment-canal
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    ports:
+      - "11110:11110"
+      - "11111:11111"
+      - "11112:11112"
+    volumes:
+      - ./configs/canal/canal.properties:/opt/canal/canal-server/conf/canal.properties:ro
+      - ./configs/canal/example/instance.properties:/opt/canal/canal-server/conf/example/instance.properties:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /opt/canal/canal-server/logs/canal/canal.log || test -f /opt/canal/canal-server/logs/example/example.log"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   elasticsearch:
     # docker.aityp.com mirror of docker.elastic.co/elasticsearch/elasticsearch:8.15.1

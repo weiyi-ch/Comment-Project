@@ -27,8 +27,9 @@ func (postCounter) TableName() string {
 
 func (d *Data) queryPostCounterByID(ctx context.Context, postID int64) (*postStatsCache, error) {
 	var row postCounter
-	err := d.q.Post.WithContext(ctx).UnderlyingDB().
+	err := d.db.
 		WithContext(ctx).
+		Table((&postCounter{}).TableName()).
 		Where("post_id = ?", postID).
 		First(&row).
 		Error
@@ -51,8 +52,9 @@ func (d *Data) loadPostCounters(ctx context.Context, postIDs []int64) (map[int64
 	}
 
 	var rows []postCounter
-	err := d.q.Post.WithContext(ctx).UnderlyingDB().
+	err := d.db.
 		WithContext(ctx).
+		Table((&postCounter{}).TableName()).
 		Where("post_id IN ?", ids).
 		Find(&rows).
 		Error

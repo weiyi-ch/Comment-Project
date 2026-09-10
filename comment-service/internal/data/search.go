@@ -48,15 +48,14 @@ const (
 
 // 搜索缓存和预留 MySQL 缓存相关常量。
 //
-// 搜索结果组合条件多，统一使用短 TTL 缓存，不做精确失效。
+// 搜索结果组合条件多，评论搜索仍使用短 TTL 缓存；帖子搜索直接依赖 ES。
 const (
 	// ES 搜索结果缓存 key 前缀。
 	//
 	// 说明：
-	// 1. es:post_search:{hash} 缓存帖子搜索结果；
+	// 1. 帖子搜索不做应用层整页缓存，避免长尾关键词低命中和失效困难；
 	// 2. es:comment_search:{hash} 缓存评论搜索结果；
 	// 3. hash 由搜索参数生成，避免 key 过长。
-	esPostSearchCachePrefix    = "es:post_search:"
 	esCommentSearchCachePrefix = "es:comment_search:"
 
 	// MySQL 对象缓存 key 前缀。
@@ -92,8 +91,8 @@ const (
 //
 // 当前职责：
 // 1. 对外提供搜索能力；
-// 2. 先查 Redis 缓存；
-// 3. 缓存未命中时通过 singleflight 合并相同请求；
+// 2. 帖子搜索直接查 ES，评论搜索先查 Redis 短缓存；
+// 3. 评论缓存未命中时通过 singleflight 合并相同请求；
 // 4. 最终查询 ES，并把 ES 的 _source 转换为业务对象。
 type searchRepo struct {
 	data *Data
@@ -120,12 +119,6 @@ func NewSearchRepo(data *Data, logger log.Logger) biz.SearchRepo {
 		data: data,
 		log:  log.NewHelper(log.With(logger, "module", "data/search")),
 	}
-}
-
-// postSearchCache 是帖子搜索结果缓存结构。
-type postSearchCache struct {
-	Items []*biz.Post `json:"items"`
-	Total int64       `json:"total"`
 }
 
 // commentSearchCache 是评论搜索结果缓存结构。
@@ -175,75 +168,26 @@ type commentESDoc struct {
 // SearchPostsFromES 是帖子搜索入口。
 //
 // 调用链：
-// 1. 根据搜索参数生成 Redis key；
-// 2. 查 Redis 缓存；
-// 3. 缓存命中，直接返回；
-// 4. 缓存未命中，通过 singleflight 合并相同请求；
-// 5. 真正查询 ES；
-// 6. 写入 Redis 短缓存；
-// 7. 返回搜索结果。
+// 1. 直接查询 ES post 索引；
+// 2. 从 ES _source 转换帖子列表；
+// 3. 返回前补 post_counter 和 Redis pending/processing delta。
+//
+// 说明：
+// 帖子关键词和分页组合分散，整页 Redis 缓存命中率低且很难精准失效。
+// 这里让 ES 负责搜索层缓存与排序，应用层只补动态计数。
 func (r *searchRepo) SearchPostsFromES(ctx context.Context, param *biz.PostSearchParam) ([]*biz.Post, int64, error) {
 	if param == nil {
 		param = &biz.PostSearchParam{}
 	}
 
-	// 搜索缓存 key 由关键词、作者、状态、分页等参数归一化后 hash 得到。
-	// 同一组搜索条件会命中同一个短 TTL 缓存。
-	key := buildPostSearchCacheKey(param)
-
-	// 第一层读取 Redis 搜索结果缓存。
-	// 命中后直接返回 ES _source 转换好的业务对象，不再访问 ES。
-	cache, ok := r.getPostSearchCache(ctx, key)
-	if ok {
-		if err := r.data.attachBizPostCounters(ctx, cache.Items); err != nil {
-			return nil, 0, err
-		}
-		return cache.Items, cache.Total, nil
-	}
-
-	// 缓存未命中后使用 singleflight 合并相同搜索条件，避免同一关键词瞬时打爆 ES。
-	val, err, _ := r.esGroup.Do(key, func() (interface{}, error) {
-		// Double Check：
-		// 当前 goroutine 等待 singleflight 的过程中，其他 goroutine 可能已经写入缓存。
-		cache, ok := r.getPostSearchCache(ctx, key)
-		if ok {
-			return cache, nil
-		}
-
-		items, total, err := r.searchPostsFromESNoCache(ctx, param)
-		if err != nil {
-			return nil, err
-		}
-
-		// 把 ES 查询结果写成短 TTL 缓存。
-		// 搜索结果允许短暂最终一致，因此不做复杂的写路径精准失效。
-		cache = &postSearchCache{
-			Items: items,
-			Total: total,
-		}
-
-		if data, err := json.Marshal(cache); err == nil {
-			if err := r.setCache(ctx, key, data, esSearchCacheTTL); err != nil {
-				r.log.WithContext(ctx).Warnf("set es post cache failed, key=%s, err=%v", key, err)
-			}
-		}
-
-		return cache, nil
-	})
+	items, total, err := r.searchPostsFromESNoCache(ctx, param)
 	if err != nil {
 		return nil, 0, err
 	}
-
-	// singleflight 返回值必须是帖子搜索缓存结构，避免未来内部返回值被误改后静默出错。
-	cache, ok = val.(*postSearchCache)
-	if !ok {
-		return nil, 0, fmt.Errorf("invalid post search cache result")
-	}
-
-	if err := r.data.attachBizPostCounters(ctx, cache.Items); err != nil {
+	if err := r.data.attachBizPostCounters(ctx, items); err != nil {
 		return nil, 0, err
 	}
-	return cache.Items, cache.Total, nil
+	return items, total, nil
 }
 
 // SearchCommentsFromES 是评论搜索入口。
@@ -607,30 +551,6 @@ func convertCommentESDocToModel(doc commentESDoc) *model.StudyComment {
 	}
 }
 
-// getPostSearchCache 读取帖子搜索缓存。
-func (r *searchRepo) getPostSearchCache(ctx context.Context, key string) (*postSearchCache, bool) {
-	data, err := r.getCache(ctx, key)
-	if err != nil {
-		r.log.WithContext(ctx).Warnf("get es post cache failed, key=%s, err=%v", key, err)
-		return nil, false
-	}
-
-	if len(data) == 0 {
-		return nil, false
-	}
-
-	var cache postSearchCache
-	if err := json.Unmarshal(data, &cache); err != nil {
-		r.log.WithContext(ctx).Warnf("unmarshal es post cache failed, key=%s, err=%v", key, err)
-
-		// 缓存内容损坏时删除，避免反复解析失败。
-		_ = r.delCache(ctx, key)
-		return nil, false
-	}
-
-	return &cache, true
-}
-
 // getCommentSearchCache 读取评论搜索缓存。
 func (r *searchRepo) getCommentSearchCache(ctx context.Context, key string) (*commentSearchCache, bool) {
 	data, err := r.getCache(ctx, key)
@@ -655,18 +575,6 @@ func (r *searchRepo) getCommentSearchCache(ctx context.Context, key string) (*co
 	return &cache, true
 }
 
-// postSearchCacheParam 用于生成帖子搜索缓存 key。
-//
-// 注意：
-// 不直接把 param 拼到 key 中，而是先 JSON 序列化再 hash，避免 key 过长。
-type postSearchCacheParam struct {
-	Keyword  string `json:"keyword"`
-	AuthorID int64  `json:"author_id"`
-	Status   int32  `json:"status"`
-	PageNum  int32  `json:"page_num"`
-	PageSize int32  `json:"page_size"`
-}
-
 // commentSearchCacheParam 用于生成评论搜索缓存 key。
 type commentSearchCacheParam struct {
 	Keyword          string `json:"keyword"`
@@ -678,19 +586,6 @@ type commentSearchCacheParam struct {
 	EndTime          int64  `json:"end_time"`
 	PageNum          int32  `json:"page_num"`
 	PageSize         int32  `json:"page_size"`
-}
-
-// buildPostSearchCacheKey 生成帖子搜索缓存 key。
-func buildPostSearchCacheKey(param *biz.PostSearchParam) string {
-	p := postSearchCacheParam{
-		Keyword:  strings.TrimSpace(param.Keyword),
-		AuthorID: param.AuthorID,
-		Status:   param.Status,
-		PageNum:  normalizeCachePageNum(param.PageNum),
-		PageSize: normalizeCachePageSize(param.PageSize),
-	}
-
-	return esPostSearchCachePrefix + hashStruct(p)
 }
 
 // buildCommentSearchCacheKey 生成评论搜索缓存 key。

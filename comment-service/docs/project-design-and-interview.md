@@ -240,12 +240,12 @@ StudentService.GetPostDetailStudent
 StudentService/SearchService
   -> SearchUsecase
   -> searchRepo
-       -> Redis GET es:post_search:{hash}
        -> Elasticsearch search post index
-       -> Redis SET 短 TTL
+       -> 解析 ES _source
+       -> 批量补 post_counter + Redis pending/processing delta
 ```
 
-搜索链路关注召回和排序，详情链路关注准确状态。搜索结果可以展示摘要，但点击详情后走帖子详情链路重新校验。
+搜索链路关注召回和排序，详情链路关注准确状态。帖子搜索不再做 Redis 整页缓存，因为关键词和分页组合长尾明显，命中率低且写路径难以精准失效；普通搜索直接依赖 ES，自身结果点击后仍走帖子详情链路重新校验。
 
 ### 5.3 点赞和取消点赞
 
@@ -335,7 +335,7 @@ AuditComment
 | 评论对象 | `mysql:comment:{comment_id}` | 10 分钟 ±10% | 评论详情、删除校验 |
 | 回复列表 | `mysql:comment_replies:{comment_id}` | 10 分钟 ±10% | 评论详情/帖子详情复用 |
 | 评论列表 ID | `mysql:student:post_comments:{post_id}:{hash}` | 2 分钟 ±10% | 某个帖子某一页的 comment_id 列表和 total |
-| 搜索结果 | `es:post_search:{hash}` | 2 分钟 ±10% | 重复关键词查询加速 |
+| 评论搜索结果 | `es:comment_search:{hash}` | 2 分钟 ±10% | 评论搜索重复查询加速 |
 | 空值缓存 | 同对象 key | 30 秒 ±10% | 防缓存穿透 |
 | Bloom | `bf:post` / `bf:comment` | 常驻 | 拦截明显不存在 ID |
 | 短锁 | `lock:post_like:{post_id}:{student_id}` | 秒级 | 收敛点赞并发 |

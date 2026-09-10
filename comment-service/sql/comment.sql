@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS post (
     deleted_at DATETIME NULL,
     UNIQUE KEY uk_post_id (post_id),
     KEY idx_author_status_ct (author_id, status, created_at),
+    KEY idx_author_status_deleted_ct (author_id, status, deleted_at, created_at),
     KEY idx_status_ct (status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知识帖表';
 
@@ -73,6 +74,7 @@ CREATE TABLE IF NOT EXISTS counter_batch (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_counter_batch_id (batch_id),
     KEY idx_counter_batch_status_retry (status, next_retry_at),
+    KEY idx_counter_batch_type_status_retry_id (counter_type, status, next_retry_at, id),
     KEY idx_counter_batch_post_status (post_id, counter_type, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='计数异步落库批次表';
 
@@ -87,6 +89,8 @@ CREATE TABLE IF NOT EXISTS counter_dirty_outbox (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY idx_dirty_outbox_status_retry (status, next_retry_at),
+    KEY idx_dirty_outbox_status_retry_id (status, next_retry_at, id),
+    KEY idx_dirty_outbox_status_updated_id (status, updated_at, id),
     KEY idx_dirty_outbox_post (post_id, event_type, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='计数dirty通知outbox表';
 
@@ -119,6 +123,7 @@ CREATE TABLE IF NOT EXISTS es_sync_retry (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY idx_es_sync_retry_due (next_retry_at),
+    KEY idx_es_sync_retry_due_id (next_retry_at, id),
     KEY idx_es_sync_retry_doc (target_index, doc_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ES同步失败重试表';
 
@@ -167,10 +172,14 @@ CREATE TABLE IF NOT EXISTS study_comment (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_comment_id (comment_id),
     KEY idx_post_visible_ct (post_id, visible_status, created_at),
+    KEY idx_post_visible_deleted_ct (post_id, visible_status, deleted_at, created_at),
     KEY idx_post_audit_ct (post_id, audit_status, created_at),
     KEY idx_student_ct (student_id, created_at),
+    KEY idx_student_deleted_ct (student_id, deleted_at, created_at),
     KEY idx_visible_ct (visible_status, created_at),
     KEY idx_operator_ct (manual_operator_id, created_at),
     KEY idx_audit_status_ct (audit_status, created_at),
+    KEY idx_audit_deleted_ct (audit_status, deleted_at, created_at),
+    KEY idx_reply_status_deleted (reply_id, reply_status, deleted_at),
     KEY idx_reply_id (reply_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学生学习打卡评论表';

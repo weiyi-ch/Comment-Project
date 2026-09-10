@@ -1,6 +1,6 @@
 # comment-service 缓存设计说明
 
-这份文档专门讲缓存。主线是：MySQL 是事实源，Redis 只做热点读加速、短期列表缓存、搜索结果缓存和并发保护。
+这份文档专门讲缓存。主线是：MySQL 是事实源，Redis 只做热点读加速、短期列表缓存、评论搜索短缓存和并发保护；帖子搜索直接依赖 Elasticsearch。
 
 ## 1. 缓存目标
 
@@ -25,10 +25,12 @@
 | 助教评论列表 ID | `mysql:post_comments:{post_id}:{hash}` | `version/comment_ids/total` | 2 分钟 ±10% |
 | 运营审核列表 ID | `mysql:operator:audit_comments:{audit_status}:{hash}` | `version/comment_ids/total` | 2 分钟 ±10% |
 | 运营帖子评论 ID | `mysql:operator:post_comments:{post_id}:{hash}` | `version/comment_ids/total` | 2 分钟 ±10% |
-| 搜索结果 | `es:post_search:{hash}` / `es:comment_search:{hash}` | 搜索结果 JSON | 2 分钟 ±10% |
+| 评论搜索结果 | `es:comment_search:{hash}` | 评论搜索结果 JSON | 2 分钟 ±10% |
 | 空值缓存 | 对象 key -> `__nil__` | 空标记 | 30 秒 ±10% |
 | Bloom | `bf:post` / `bf:comment` | RedisBloom | 常驻 |
 | 点赞短锁 | `lock:post_like:{post_id}:{student_id}` | token | 3 秒 |
+
+帖子搜索不做 Redis 整页缓存。关键词、分页、作者和状态组合分散，整页缓存命中率低，且帖子更新时难以精准删除所有相关搜索 key；因此帖子搜索直接查询 ES，返回前只补 `post_counter + Redis pending/processing delta`。
 
 ## 3. 评论列表为什么拆成 ID + 对象
 
